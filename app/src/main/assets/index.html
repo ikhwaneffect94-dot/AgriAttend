@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#102a24" />
+  <meta name="description" content="Aplikasi pendamping absensi AgriConnect untuk lokasi kerja terdaftar, pencatatan GPS aktual, dan pengajuan koreksi absensi." />
+  <title>AgriAttend — Pendamping Absensi</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="assets/icon-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="auth-screen" id="authScreen">
+    <section class="auth-card">
+      <div class="auth-brand"><span class="brand-mark">AG</span><div><strong>AgriAttend</strong><small>AGRICONNECT HRIS</small></div></div>
+      <div class="eyebrow">MASUK KE AKUN PERUSAHAAN</div>
+      <h1>Login AgriConnect</h1>
+      <p class="auth-copy">Gunakan akun AgriConnect resmi. AgriAttend menggunakan alur username lalu password. Jika server secara khusus mewajibkan OTP, aplikasi tidak melewati verifikasi tersebut.</p>
+      <form id="authForm">
+        <div class="field-block"><label for="loginUsername">Username</label><input id="loginUsername" autocomplete="username" required placeholder="Masukkan username" /></div>
+        <div id="credentialStep" hidden>
+          <div class="field-block"><label for="loginPassword">Password</label><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Masukkan password" /></div>
+          
+        </div>
+        <button class="primary-btn large full" type="button" id="loginContinue">Lanjutkan <span>→</span></button>
+        <div class="auth-actions" id="authActions" hidden><button class="primary-btn large full" type="submit" id="loginSubmit">Login AgriConnect <span>→</span></button><button class="ghost-btn full" type="button" id="backToUsername">Ganti username</button></div>
+      </form>
+      <div class="auth-message" id="authMessage" role="status"></div>
+      <div class="auth-footnote">Koneksi HTTPS langsung ke endpoint login yang ditemukan dalam APK AgriConnect v1.0.2. Pastikan penggunaan integrasi pihak ketiga diizinkan oleh pengelola perusahaan.</div>
+    </section>
+  </div>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navigasi utama">
+      <a class="brand" href="#home" data-route="home">
+        <span class="brand-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 27 9.3v13.4L16 29 5 22.7V9.3L16 3Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20.8 10.1c-6.1.3-9.8 3.4-10 9.5 5.7.1 9.4-3.1 10-9.5Z" fill="currentColor"/><path d="M10.7 21.8c2.5-3 5.4-5.6 9.2-8.3" fill="none" stroke="#102a24" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        <span><strong>AgriAttend</strong><small>ATTENDANCE COMPANION</small></span>
+      </a>
+      <div class="sidebar-label">MENU</div>
+      <nav class="side-nav">
+        <button class="nav-item active" data-route="home"><span class="nav-icon">⌂</span>Ringkasan</button>
+        <button class="nav-item" data-route="attendance"><span class="nav-icon">◷</span>Absensi</button>
+        <button class="nav-item" data-route="calendar"><span class="nav-icon">▦</span>Kalender Absensi</button>
+        <button class="nav-item" data-route="payslip"><span class="nav-icon">▤</span>Slip Gaji</button>
+        <button class="nav-item" data-route="verval"><span class="nav-icon">✓</span>Pantauan Verval</button>
+        <button class="nav-item" data-route="profile"><span class="nav-icon">◎</span>Profil Karyawan</button>
+        <button class="nav-item" data-route="correction"><span class="nav-icon">↗</span>Pengajuan</button>
+        <button class="nav-item" data-route="history"><span class="nav-icon">▤</span>Riwayat</button>
+        <button class="nav-item" data-route="locations"><span class="nav-icon">⌖</span>Lokasi Kerja</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="security-note"><span class="security-dot"></span><div><b>Mode pendamping</b><small>Data tersimpan di perangkat</small></div></div>
+        <button class="logout-btn" id="logoutBtn">Keluar dari AgriConnect ↗</button><div class="sidebar-version">Versi 1.5.3 · Android</div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark small"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 27 9.3v13.4L16 29 5 22.7V9.3L16 3Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20.8 10.1c-6.1.3-9.8 3.4-10 9.5 5.7.1 9.4-3.1 10-9.5Z" fill="currentColor"/></svg></span><b>AgriAttend</b></div>
+        <div class="breadcrumb"><span>Workspace</span><i>/</i><b id="pageCrumb">Ringkasan</b></div>
+        <div class="topbar-right"><span class="today-pill" id="todayDate">—</span><button class="avatar" id="profileShortcut" aria-label="Edit profil">IM</button></div>
+      </header>
+
+      <section class="page active" id="page-home">
+        <div class="welcome-row">
+          <div><div class="eyebrow">WORKSPACE / ABSENSI</div><h1>Selamat datang<span id="welcomeName">!</span></h1><p class="subhead">Pantau respons absensi AgriConnect dan kelola draf koreksi dalam satu tempat.</p></div>
+          <div class="live-clock-card"><span class="clock-label">WAKTU PERANGKAT</span><strong id="liveClock">--:--:--</strong><span id="liveDay">Memuat waktu...</span></div>
+        </div>
+        <div class="notice-banner"><span class="notice-icon">i</span><div><b>Terhubung ke sesi AgriConnect</b><p>Permintaan absensi dikirim ke API tenant setelah login. GPS aktual dan validasi radius kantor tetap diperiksa.</p></div><button class="notice-close" id="dismissNotice" aria-label="Tutup pemberitahuan">×</button></div>
+        <div class="stats-grid">
+          <article class="stat-card"><div class="stat-top"><span class="stat-icon green">↗</span><span class="stat-caption">HARI INI</span></div><strong id="statToday">0</strong><span class="stat-foot">Permintaan terkirim hari ini</span></article>
+          <article class="stat-card"><div class="stat-top"><span class="stat-icon blue">⌖</span><span class="stat-caption">LOKASI</span></div><strong id="statLocations">0</strong><span class="stat-foot">Lokasi kerja tersimpan</span></article>
+          <article class="stat-card"><div class="stat-top"><span class="stat-icon amber">▤</span><span class="stat-caption">KOREKSI</span></div><strong id="statCorrections">0</strong><span class="stat-foot">Draf pengajuan koreksi</span></article>
+        </div>
+        <div class="section-heading"><div><h2>Aksi cepat</h2><p>Pilih aktivitas yang ingin dilakukan.</p></div><span class="muted-label">QUICK ACTIONS</span></div>
+        <div class="quick-grid">
+          <article class="action-card checkin-card"><div class="action-art checkin-art"><span>↗</span></div><div class="action-copy"><span class="tag tag-green">CHECK IN</span><h3>Absen Masuk</h3><p>Kirim lokasi GPS aktual ke layanan AgriConnect.</p><button class="primary-btn" data-route="attendance" data-kind="CHECKIN">Buka Absen Masuk <span>→</span></button></div></article>
+          <article class="action-card checkout-card"><div class="action-art checkout-art"><span>↙</span></div><div class="action-copy"><span class="tag tag-blue">CHECK OUT</span><h3>Absen Pulang</h3><p>Kirim permintaan CHECKOUT resmi ke layanan AgriConnect.</p><button class="secondary-btn" data-route="attendance" data-kind="CHECKOUT">Buka Absen Pulang <span>→</span></button></div></article>
+        </div>
+        <div class="bottom-grid">
+          <article class="panel recent-panel"><div class="panel-head"><div><h3>Aktivitas terbaru</h3><p>Aktivitas yang tercatat pada perangkat ini</p></div><button class="text-btn" data-route="history">Lihat semua →</button></div><div id="recentList" class="recent-list"></div></article>
+          <article class="panel guide-panel"><div class="panel-head"><div><h3>Butuh koreksi absensi?</h3><p>Untuk kejadian lupa absen atau kesalahan pencatatan.</p></div><span class="guide-icon">✎</span></div><div class="guide-box"><b>Ajukan tanggal dan waktu yang seharusnya</b><span>Lengkapi alasan dan lampiran pendukung. Permintaan koreksi harus ditinjau pihak berwenang.</span></div><button class="outline-btn full" data-route="correction">Buat pengajuan koreksi <span>→</span></button></article>
+        </div>
+      </section>
+
+      <section class="page" id="page-attendance">
+        <div class="page-title-row"><div><div class="eyebrow">SELF SERVICE / CHECK IN-OUT</div><h1>Absensi</h1><p class="subhead">Isi empat bagian, lalu kirim ke AgriConnect.</p></div></div>
+        <article class="panel attendance-panel attendance-simple">
+          <div class="segmented" role="tablist" aria-label="Jenis absensi"><button class="segment active" data-att-type="CHECKIN">↗ Masuk</button><button class="segment" data-att-type="CHECKOUT">↙ Pulang</button></div>
+          <div class="attendance-intro compact"><div><span class="tag tag-green" id="attendanceTypeTag">CHECK IN</span><h2 id="attendanceTitle">Absen Masuk</h2><p id="attendanceDesc">Kirim lokasi GPS aktual perangkat.</p></div></div>
+          <div class="field-block"><label>Lokasi absensi</label><div class="attendance-mode-picker"><button type="button" class="mode-choice active" data-attendance-mode="inOffice"><b>Di kantor</b><small>Gunakan validasi radius kantor</small></button><button type="button" class="mode-choice" data-attendance-mode="outOffice"><b>Di luar kantor</b><small>Isi keperluan dan keterangan</small></button></div></div>
+          <div class="gps-card gps-card-compact"><div class="gps-header"><div><span class="gps-dot"></span><b>Lokasi GPS perangkat</b></div><button id="refreshGPS" class="tiny-btn">↻ Perbarui</button></div><div class="gps-values"><div><small>LATITUDE</small><strong id="gpsLat">Belum diambil</strong></div><div><small>LONGITUDE</small><strong id="gpsLng">Belum diambil</strong></div></div><div class="gps-meta"><span id="gpsAccuracy">Akurasi: —</span><span id="gpsDistance">Jarak kantor: —</span></div><div class="gps-map-link" id="gpsMapLink">Lokasi aktual akan tampil setelah GPS diambil.</div></div>
+          <div class="field-block" id="attendancePurposeBlock" hidden><label for="attendancePurpose">Keperluan di luar kantor <em>*</em></label><select id="attendancePurpose"><option value="">Pilih keperluan dari AgriConnect</option></select><small id="attendancePurposeHelp">Pilihan berasal dari daftar tenant.</small></div>
+          <div class="field-block"><label for="attendancePhoto">Foto / selfie <span id="photoRequiredLabel" class="required-label"></span></label><input type="file" id="attendancePhoto" accept="image/*" capture="user" /><small id="photoHelp">Foto mengikuti kebijakan tenant AgriConnect.</small><div id="photoPreview" class="photo-preview" hidden></div></div>
+          <div class="field-block" id="attendanceNoteBlock" hidden><label for="attendanceNote">Keterangan di luar kantor <em>*</em></label><textarea id="attendanceNote" rows="3" maxlength="500" placeholder="Tulis alasan/keterangan absensi..."></textarea><small id="attendanceNoteHelp">Keterangan ini dikirim sebagai remark ke AgriConnect.</small></div><div class="attendance-official-remark" id="officeRemarkInfo">Mode Di kantor menggunakan keterangan resmi AgriConnect: <b>In The Office</b>.</div>
+          <details class="location-source-details"><summary>Informasi validasi lokasi kantor</summary><div class="company-info compact-company-info"><span id="connectionStatus" hidden>Belum terhubung</span><span id="faceRecognitionNotice" hidden></span><div><small>SUMBER</small><b>API AgriConnect /dashboard/location</b></div><div><small>KOORDINAT KANTOR</small><b id="companyLocationName">Belum tersedia</b></div><div><small>RADIUS DIIZINKAN</small><b id="companyTolerance">Tidak tersedia</b></div><div><small>FOTO WAJIB</small><b id="companyPhotoPolicy">Memeriksa…</b></div></div><small id="companyLocationMessage" role="status">Koordinat dan radius hanya ditampilkan bila dikirim oleh tenant.</small><button class="outline-btn full" type="button" id="refreshCompanyLocation">Muat ulang data lokasi ↻</button></details>
+          <button class="primary-btn large full" id="recordAttendance">Kirim Absen Masuk <span>→</span></button>
+          <p class="local-footnote">Nomor tiket ditampilkan jika server mengembalikan ID permintaan.</p>
+        </article>
+      </section>
+
+      <section class="page" id="page-calendar">
+        <div class="page-title-row"><div><div class="eyebrow">DATA RESMI AGRICONNECT</div><h1>Kalender Absensi</h1><p class="subhead">Rekap harian berdasarkan timesheet server, termasuk jam aktual dan status hadir.</p></div><button class="outline-btn" id="refreshCalendar">Muat ulang ↻</button></div>
+        <div class="calendar-layout">
+          <article class="panel calendar-panel">
+            <div class="calendar-toolbar"><div class="calendar-month-nav"><button class="calendar-arrow" id="calendarPrev" aria-label="Bulan sebelumnya">‹</button><div><b id="calendarMonthLabel">—</b><small id="calendarLoadStatus">Pilih bulan untuk menarik data.</small></div><button class="calendar-arrow" id="calendarNext" aria-label="Bulan berikutnya">›</button></div><input type="month" id="calendarMonth" aria-label="Pilih bulan" /></div>
+            <div id="calendarGrid" class="calendar-grid"></div>
+            <div class="calendar-legend"><span><i class="dot on-time"></i>Tepat waktu</span><span><i class="dot late"></i>Terlambat</span><span><i class="dot absent"></i>Absent</span><span><i class="dot leave"></i>Izin/cuti</span><span><i class="dot sick"></i>Sakit</span><span><i class="dot holiday"></i>Libur</span><span><i class="dot no-check"></i>Belum lengkap</span><span><i class="dot day-off"></i>Day off</span></div>
+          </article>
+          <article class="panel day-detail-panel"><div class="panel-head"><div><h3>Detail tanggal</h3><p>Ketuk tanggal pada kalender.</p></div></div><div id="calendarDayDetail" class="calendar-day-detail"><div class="empty-state">Pilih tanggal untuk melihat detail.</div></div></article>
+        </div>
+
+      </section>
+
+
+      <section class="page" id="page-payslip">
+        <div class="page-title-row"><div><div class="eyebrow">SELF SERVICE / PAYROLL</div><h1>Slip Gaji</h1><p class="subhead">Lihat daftar periode dan rincian slip dari AgriConnect.</p></div><button class="outline-btn" id="refreshPayslip" type="button">Muat ulang ↻</button></div>
+        <article class="panel payslip-access-panel" id="payslipPinPanel"><div class="panel-head"><div><h3>Verifikasi PIN</h3><p>PIN payroll diverifikasi langsung oleh server dan tidak disimpan aplikasi.</p></div></div><div class="payslip-pin-row"><input id="payslipPin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="Masukkan PIN 6 digit" /><button class="primary-btn" id="unlockPayslip" type="button">Verifikasi</button></div><small id="payslipPinMessage">Masukkan PIN payroll yang terdaftar pada akun.</small></article>
+        <div class="payslip-layout"><article class="panel"><div class="panel-head"><div><h3>Daftar slip gaji</h3><p>Periode dan jenis payroll yang tersedia.</p></div></div><div id="payslipList" class="payslip-list"><div class="empty-state">Verifikasi PIN untuk memuat slip gaji.</div></div></article><article class="panel payslip-detail-panel"><div class="panel-head"><div><h3>Rincian slip</h3><p id="payslipDetailSubtitle">Pilih salah satu periode.</p></div></div><div id="payslipDetail"><div class="empty-state">Rincian gaji akan tampil di sini.</div></div></article></div>
+      </section>
+
+      <section class="page" id="page-verval">
+        <div class="page-title-row"><div><div class="eyebrow">PEMANTAUAN KOPDES</div><h1>Pantauan Verval Kopdes</h1><p class="subhead">Periksa batch dan hasil verifikasi koperasi berdasarkan kabupaten/kota penugasan AgriConnect.</p></div><button class="primary-btn" id="refreshVervalData">↻ Refresh Data Verval</button></div>
+        <article class="panel verval-access-panel">
+          <div class="panel-head"><div><h3>Akses Simkopdes</h3><p>Lokasi penugasan dibaca dari data profil AgriConnect. Passcode disimpan terenkripsi di perangkat Android.</p></div><span class="verval-secure-indicator" id="vervalCredentialStatus">Belum disimpan</span></div>
+          <div class="verval-assignment"><div><small>KABUPATEN / KOTA PENUGASAN</small><b id="vervalAssignmentLabel">Login untuk membaca lokasi penugasan</b></div><div><small>PROVINSI</small><b id="vervalProvinceLabel">—</b></div></div>
+          <div class="verval-credential-row"><div class="field-block" id="vervalCredentialEntry"><label for="vervalPassword">Passcode pemantauan</label><input type="password" id="vervalPassword" autocomplete="new-password" placeholder="Masukkan passcode satu kali" /><small id="vervalCredentialHelp">Passcode tidak disimpan di riwayat, ekspor, atau local storage.</small></div><div class="verval-credential-actions"><button class="outline-btn" type="button" id="saveVervalPassword">Simpan terenkripsi</button><button class="text-btn danger-text" type="button" id="clearVervalPassword">Hapus akses</button></div></div>
+          <p class="verval-live-status" id="vervalLiveStatus" role="status">Belum ada pemeriksaan. Tekan Refresh Data Verval setelah login AgriConnect dan menyimpan passcode.</p>
+        </article>
+        <div class="verval-summary-grid"><article class="verval-summary-card"><small>JUMLAH KOPERASI</small><b id="vervalTotal">—</b></article><article class="verval-summary-card"><small>BATCH 1–4</small><b id="vervalBatchCount">—</b></article><article class="verval-summary-card"><small>NON-PRIORITAS</small><b id="vervalNonPriority">—</b></article><article class="verval-summary-card"><small>PEMBARUAN TERAKHIR</small><b id="vervalUpdatedAt">Belum ada</b></article></div>
+        <article class="panel verval-results-panel"><div class="panel-head"><div><h3>Hasil verifikasi dan validasi</h3><p id="vervalResultSubtitle">Daftar koperasi akan muncul setelah data Simkopdes berhasil dibaca.</p></div><span class="verval-source-tag">SUMBER SIMKOPDES</span></div><div class="verval-filters"><input id="vervalSearch" type="search" placeholder="Cari nama koperasi…" /><select id="vervalBatchFilter"><option value="all">Semua batch</option><option value="1">Batch 1</option><option value="2">Batch 2</option><option value="3">Batch 3</option><option value="4">Batch 4</option><option value="none">Tanpa batch</option></select><select id="vervalStatusFilter"><option value="all">Semua hasil</option><option value="non">Non-prioritas</option><option value="layak">Layak digunakan</option><option value="catatan">Catatan perbaikan</option></select></div><div id="vervalRecords" class="verval-records"><div class="empty-state">Belum ada data verval. Gunakan tombol Refresh Data Verval untuk mengambil data terbaru.</div></div></article>
+        <div class="inline-warning"><b>Catatan sumber:</b> Status dan batch ditampilkan sesuai informasi yang berhasil dibaca dari portal. AgriAttend tidak mengarang status, dan akan memberi tahu bila portal berubah atau akses tidak berhasil.</div>
+      </section>
+
+      <section class="page" id="page-profile">
+        <div class="page-title-row"><div><div class="eyebrow">DATA KARYAWAN</div><h1>Profil Karyawan</h1><p class="subhead">Informasi profil aktif yang dibaca dari endpoint profil AgriConnect.</p></div><button class="outline-btn" id="refreshProfile">Muat ulang profil ↻</button></div>
+        <article class="panel profile-summary-panel"><div class="profile-avatar-large" id="profileAvatarLarge">AG</div><div class="profile-summary-copy"><small>PROFIL AKTIF</small><h2 id="profileDisplayName">Belum login</h2><span id="profileDisplayEmployee">Login untuk memuat profil</span><i id="profileDataStatus">Belum terhubung</i></div></article>
+        <article class="panel profile-data-panel"><div class="panel-head"><div><h3>Informasi karyawan</h3><p>Profil dasar dan data penempatan kerja.</p></div></div><div class="profile-data-grid" id="profileDataGrid"><div class="empty-state">Login AgriConnect untuk menarik data profil.</div></div></article>
+        <div class="inline-warning"><b>Privasi:</b> Data profil hanya ditampilkan untuk akun dan profil karyawan yang berhasil diautentikasi. Aplikasi tidak mengubah data pribadi di server.</div>
+      </section>
+
+      <section class="page" id="page-correction">
+        <div class="page-title-row"><div><div class="eyebrow">SELF SERVICE</div><h1>Pengajuan</h1><p class="subhead">Kelola koreksi absensi dan permohonan perubahan jam kerja.</p></div><span class="approval-badge">Perlu persetujuan HR</span></div>
+        <div class="correction-layout">
+          <article class="panel correction-panel">
+            <div class="form-section-title"><span class="form-icon">✎</span><div><h2>Detail pengajuan</h2><p>Formulir mengikuti alur backdate pada AgriConnect.</p></div></div>
+            <form id="correctionForm">
+              <div class="form-grid">
+                <div class="field-block"><label for="correctionType">Jenis koreksi <em>*</em></label><select id="correctionType" required><option value="CHECKIN">Absen Masuk</option><option value="CHECKOUT">Absen Pulang</option></select></div>
+                <div class="field-block"><label for="correctionDate">Tanggal kejadian <em>*</em></label><input type="date" id="correctionDate" required /></div>
+                <div class="field-block"><label for="correctionTime">Jam yang dimohonkan <em>*</em></label><input type="time" id="correctionTime" required /></div>
+                <div class="field-block full-span"><label for="correctionPurpose">Keperluan <em>*</em></label><select id="correctionPurpose" required><option value="">Login untuk memuat pilihan keperluan</option></select><small id="correctionPurposeHelp">Pilihan keperluan dimuat dari AgriConnect setelah login.</small></div>
+                <div class="field-block full-span"><label for="correctionReason">Alasan dan kronologi <em>*</em></label><textarea id="correctionReason" rows="4" required placeholder="Jelaskan kejadian dengan jujur dan ringkas..."></textarea><small>Permohonan akan diproses sesuai kebijakan dan persetujuan perusahaan.</small></div>
+                <div class="field-block full-span"><label for="correctionAttachment">Lampiran pendukung (opsional)</label><input type="file" id="correctionAttachment" accept="image/*,.pdf" multiple /><small>Bisa memilih beberapa gambar/PDF. Setiap berkas harus di bawah 5 MB; lampiran akan ikut dikirim ke API AgriConnect.</small></div>
+              </div>
+              <div class="form-actions"><button class="primary-btn" id="submitCorrection" type="submit">Kirim pengajuan koreksi <span>→</span></button><button class="ghost-btn" type="reset">Bersihkan</button></div>
+            </form>
+            <div class="form-section-title shift-section-title"><span class="form-icon">⇄</span><div><h2>Perubahan jam kerja</h2><p>Ajukan perubahan jadwal/shift melalui AgriConnect.</p></div></div>
+            <form id="shiftChangeForm">
+              <div class="form-grid">
+                <div class="field-block"><label for="shiftStartDate">Tanggal mulai <em>*</em></label><input type="date" id="shiftStartDate" required /></div>
+                <div class="field-block"><label for="shiftEndDate">Tanggal selesai <em>*</em></label><input type="date" id="shiftEndDate" required /></div>
+                <div class="field-block full-span"><label for="shiftChangeId">Jadwal / shift yang diminta <em>*</em></label><select id="shiftChangeId" required><option value="">Login untuk memuat pilihan shift</option></select><small id="shiftChangeHelp">Pilihan mengikuti lookup shift/shift-change AgriConnect.</small></div>
+                <div class="field-block full-span"><label for="shiftChangeRemark">Alasan perubahan <em>*</em></label><textarea id="shiftChangeRemark" rows="3" required maxlength="500" placeholder="Jelaskan alasan perubahan jadwal..."></textarea></div>
+              </div>
+              <div class="form-actions"><button class="primary-btn" id="submitShiftChange" type="submit">Kirim permohonan perubahan jam kerja →</button></div>
+            </form>
+            <div class="inline-warning"><b>Informasi:</b> Pengajuan dikirim ke endpoint backdate AgriConnect dan tetap menunggu pemeriksaan/persetujuan HR. Tanggal dan jam di sini adalah waktu yang dimohonkan untuk koreksi, bukan waktu absensi normal.</div>
+          </article>
+          <aside class="panel side-info-panel"><div class="panel-head"><div><h3>Alur koreksi</h3><p>Pengajuan bukan perubahan otomatis.</p></div></div><div class="approval-flow"><div><span>01</span><b>Buat permintaan</b><small>Isi jenis, tanggal, jam, alasan, dan bukti.</small></div><div><span>02</span><b>Kirim ke AgriConnect</b><small>Nomor permintaan ditampilkan dari respons server bila tersedia.</small></div><div><span>03</span><b>Menunggu persetujuan</b><small>HR/atasan memeriksa permintaan.</small></div><div><span>04</span><b>Periksa hasil</b><small>Catatan diperbarui setelah disetujui.</small></div></div><div class="endpoint-note"><small>REFERENSI RUTE DI APK</small><code>/api/user/self-service/check-in-out/backdate/v1/request</code><span>Menggunakan token login, tenant, profil aktif, dan otorisasi resmi.</span></div></aside>
+        </div>
+        <article class="panel official-requests-panel">
+          <div class="panel-head"><div><h3>Status permintaan AgriConnect</h3><p>Permintaan pribadi dan hasil persetujuan dari server.</p></div><button class="outline-btn" type="button" id="refreshRequestStatuses">Muat ulang ↻</button></div>
+          <div class="request-status-summary" id="requestStatusSummary"><div><small>Menunggu</small><b>—</b></div><div><small>Disetujui</small><b>—</b></div><div><small>Ditolak</small><b>—</b></div><div><small>Dibatalkan</small><b>—</b></div></div>
+          <div class="request-category-tabs"><button class="filter-tab active" data-request-category="all">Semua kategori</button><button class="filter-tab" data-request-category="check-in-out">Koreksi absen</button><button class="filter-tab" data-request-category="Leave">Cuti</button><button class="filter-tab" data-request-category="Permission">Izin</button><button class="filter-tab" data-request-category="Sick">Sakit</button><button class="filter-tab" data-request-category="shift-change">Perubahan jam kerja</button></div>
+          <div class="request-status-tabs"><button class="filter-tab active" data-request-status="all">Semua status</button><button class="filter-tab" data-request-status="In Progress">Menunggu</button><button class="filter-tab" data-request-status="Approved">Disetujui</button><button class="filter-tab" data-request-status="Rejected">Ditolak</button><button class="filter-tab" data-request-status="Canceled">Dibatalkan</button></div>
+          <p class="request-status-notice" id="requestStatusNotice">Status belum dimuat.</p>
+          <div id="officialRequestList" class="official-request-list"><div class="empty-state">Login untuk menarik status pengajuan AgriConnect.</div></div>
+        </article>
+      </section>
+
+      <section class="page" id="page-history">
+        <div class="page-title-row"><div><div class="eyebrow">AKTIVITAS</div><h1>Riwayat</h1><p class="subhead">Semua catatan dan draf yang disimpan pada perangkat ini.</p></div><button class="outline-btn" id="exportAll">Ekspor data ↓</button></div>
+        <article class="panel history-panel"><div class="history-toolbar"><div class="filter-tabs"><button class="filter-tab active" data-history-filter="all">Semua</button><button class="filter-tab" data-history-filter="attendance">Catatan GPS</button><button class="filter-tab" data-history-filter="correction">Pengajuan koreksi</button></div><button class="text-btn danger-text" id="clearHistory">Hapus riwayat lokal</button></div><div id="historyList" class="history-list"></div></article>
+      </section>
+
+      <section class="page" id="page-locations">
+        <div class="page-title-row"><div><div class="eyebrow">PENGELOLAAN</div><h1>Lokasi Kerja</h1><p class="subhead">Kelola daftar titik kerja yang memang ditetapkan atau diizinkan perusahaan.</p></div><button class="primary-btn" id="addLocationBtn">＋ Tambah lokasi</button></div>
+        <div class="notice-banner compact-notice"><span class="notice-icon">i</span><div><b>Lokasi terdaftar bukan lokasi GPS aktual</b><p>Koordinat lokasi di bawah hanya menjadi referensi lokasi kerja. Catatan absensi pendamping selalu mengambil GPS aktual perangkat.</p></div></div>
+        <div id="locationsGrid" class="locations-grid"></div>
+        <div class="panel add-location-panel" id="locationEditor" hidden><div class="panel-head"><div><h3 id="locationEditorTitle">Tambah lokasi kerja</h3><p>Masukkan koordinat titik kerja resmi.</p></div><button class="close-editor" id="closeLocationEditor">×</button></div><form id="locationForm"><input type="hidden" id="locationId" /><div class="form-grid"><div class="field-block"><label for="locationName">Nama lokasi <em>*</em></label><input id="locationName" required maxlength="60" placeholder="Contoh: Kantor Cabang Banjarmasin" /></div><div class="field-block"><label for="locationAddress">Alamat / keterangan</label><input id="locationAddress" maxlength="120" placeholder="Alamat lokasi kerja" /></div><div class="field-block"><label for="locationLat">Latitude <em>*</em></label><input id="locationLat" type="number" step="any" min="-90" max="90" required placeholder="-3.3186" /></div><div class="field-block"><label for="locationLng">Longitude <em>*</em></label><input id="locationLng" type="number" step="any" min="-180" max="180" required placeholder="114.5944" /></div></div><div class="form-actions"><button class="primary-btn" type="submit">Simpan lokasi</button><button class="ghost-btn" type="button" id="cancelLocation">Batal</button></div></form></div>
+      </section>
+
+      <footer class="app-footer"><span>AgriAttend · Aplikasi pendamping absensi</span><span>Login, profil, timesheet, dan status pengajuan melalui API tenant AgriConnect</span></footer>
+    </main>
+  </div>
+
+  <nav class="mobile-nav" aria-label="Navigasi bawah"><button class="active" data-route="home"><span>⌂</span>Home</button><button data-route="attendance"><span>◷</span>Absen</button><button data-route="calendar"><span>▦</span>Kalender</button><button data-route="verval"><span>✓</span>Verval</button><button data-route="payslip"><span>▤</span>Slip Gaji</button><button data-route="correction"><span>⇄</span>Pengajuan</button><button data-route="history"><span>☷</span>Riwayat</button><button data-route="profile"><span>◎</span>Profil</button></nav>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <dialog id="profileSelectDialog" class="modal"><form id="profileSelectForm"><div class="modal-head"><div><h3>Pilih profil karyawan</h3><p>Akun AgriConnect ini memiliki lebih dari satu profil.</p></div></div><div class="field-block"><label for="profileChoice">Profil</label><select id="profileChoice" required></select></div><div class="modal-actions"><button class="primary-btn" type="submit">Gunakan profil ini</button></div></form></dialog>
+  <dialog id="ticketDialog" class="modal ticket-modal"><div class="modal-head"><div><h3 id="ticketTitle">Permintaan terkirim</h3><p id="ticketMessage">Respons dari AgriConnect.</p></div><button class="close-editor" id="closeTicket" aria-label="Tutup">×</button></div><div class="ticket-number" id="ticketNumber">Nomor tiket belum tersedia</div><button class="primary-btn full" id="copyTicket" type="button">Salin nomor tiket</button></dialog>
+  
+  <script src="app.js"></script>
+</body>
+</html>

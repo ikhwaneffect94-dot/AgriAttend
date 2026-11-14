@@ -1,0 +1,3 @@
+AgriAttend v1.5.3 GitHub Actions
+
+Upload AgriAttend-Android-Ready-v1.5.3.zip ke root repository. Pastikan file .github/workflows/android.yml dari paket ini digunakan. Jalankan workflow Build AgriAttend APK pada tab Actions. Artifact yang diharapkan: AgriAttend-debug-APK-v1.5.3.

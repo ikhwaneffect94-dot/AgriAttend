@@ -1,0 +1,18 @@
+AgriAttend v1.5.3 — Static QA Report
+
+Pemeriksaan otomatis yang dijalankan pada source package:
+- JavaScript syntax: app.js — PASS (node --check).
+- JavaScript syntax: verval-automation.js — PASS (node --check).
+- AndroidManifest.xml dan seluruh XML resource: PASS (XML parse).
+- HTML: tidak ditemukan duplicate element IDs.
+- Presence check endpoint slip gaji, PIN validation, detail payslip, shift-change request/status, serta payload attendance mode: PASS.
+- Passcode Simkopdes literal tidak ditemukan pada app.js, verval-automation.js, atau MainActivity.java.
+- ZIP integrity: akan diverifikasi setelah arsip dibuat.
+
+Belum diverifikasi:
+- Build APK native (Gradle/Android SDK tidak tersedia pada lingkungan ini).
+- Login dan transaksi live pada tenant AgriConnect.
+- Pengambilan slip gaji, permohonan shift-change, dan status tiap request pada tenant nyata.
+- Login/pemilihan kabupaten/pagination dan parsing live pada portal Simkopdes.
+
+Hasil statis bukan bukti bahwa API/portal live menerima request. Gunakan GitHub Actions untuk build APK dan verifikasi pada akun/perangkat yang berwenang.
