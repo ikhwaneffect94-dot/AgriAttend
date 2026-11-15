@@ -121,7 +121,7 @@
       </section>
 
       <section class="page" id="page-verval">
-        <div class="page-title-row"><div><div class="eyebrow">PEMANTAUAN KOPDES</div><h1>Pantauan Verval</h1><p class="subhead">Cocokkan data Kopdes penempatan dengan data publik SIMKOPDES secara langsung.</p></div></div>
+        <div class="page-title-row"><div><div class="eyebrow">PEMANTAUAN KOPDES</div><h1>Pantauan Verval</h1><p class="subhead">Buka halaman resmi SIMKOPDES untuk memilih wilayah, memasukkan passcode, dan melihat seluruh tabel Verval.</p></div></div>
         <article class="panel verval-placement-panel">
           <div class="verval-placement-heading">
             <div><div class="eyebrow">KOPDES PENEMPATAN</div><h2 id="vervalPlacementName">Memuat data penugasan…</h2><p id="vervalPlacementRegion">Lokasi penugasan AgriConnect</p></div>
@@ -140,7 +140,7 @@
             <div><small>SURVEYOR</small><b id="vervalOfficialSurveyor">—</b></div>
             <a id="vervalOfficialMap" href="#" target="_blank" rel="noopener" hidden>Buka Google Maps ↗</a>
           </div>
-          <div class="verval-placement-footer"><span id="vervalUpdatedAt">Belum ada pemeriksaan</span><button class="primary-btn" id="openVervalCheckDialog" type="button">✓ Cek Data Verval</button></div>
+          <div class="verval-placement-footer"><span id="vervalUpdatedAt">Belum ada pemeriksaan</span><button class="primary-btn" id="openVervalCheckDialog" type="button">↗ Buka Portal Verval</button></div>
         </article>
         <article class="panel verval-regional-stats-panel" id="vervalRegionalStatsPanel" hidden>
           <div class="panel-head"><div><h3>Statistik Verval tingkat provinsi</h3><p id="vervalStatsProvinceLabel">Statistik agregat dari SIMKOPDES.</p><small id="vervalStatsSource">API statistik SIMKOPDES</small></div></div>
@@ -164,7 +164,8 @@
           </details>
           <p class="verval-stats-caveat">Angka di atas adalah statistik agregat tingkat provinsi, bukan hasil individual Kopdes penempatan dan bukan pembagian Batch 1–4. Status aset individual ditampilkan terpisah pada kartu Kopdes.</p>
         </article>
-        <p class="verval-live-status" id="vervalLiveStatus" role="status">Tekan Cek Data Verval untuk memilih provinsi dan kabupaten/kota. AgriAttend mengambil data langsung dari API SIMKOPDES tanpa membuka website.</p>
+        <article class="panel verval-portal-guide"><div class="panel-head"><div><h3>Alur verifikasi resmi</h3><p>1. Pilih provinsi · 2. Pilih kabupaten/kota · 3. Masukkan passcode · 4. Tampilkan tabel Verval.</p></div></div><p>Validasi passcode dan pemuatan seluruh tabel dilakukan oleh portal SIMKOPDES. Passcode dimasukkan langsung pada halaman resmi dan tidak disimpan oleh AgriAttend.</p></article>
+        <p class="verval-live-status" id="vervalLiveStatus" role="status">Tekan Buka Portal Verval untuk melanjutkan melalui halaman resmi SIMKOPDES.</p>
       </section>
       <section class="page" id="page-profile">
         <div class="page-title-row"><div><div class="eyebrow">DATA KARYAWAN</div><h1>Profil Karyawan</h1><p class="subhead">Informasi profil aktif yang dibaca dari endpoint profil AgriConnect.</p></div><button class="outline-btn" id="refreshProfile">Muat ulang profil ↻</button></div>
@@ -231,22 +232,6 @@
 
   <nav class="mobile-nav" aria-label="Navigasi bawah"><button class="active" data-route="home"><span>⌂</span>Home</button><button data-route="attendance"><span>◷</span>Absen</button><button data-route="calendar"><span>▦</span>Kalender</button><button data-route="verval"><span>✓</span>Verval</button><button data-route="payslip"><span>▤</span>Slip Gaji</button><button data-route="correction"><span>⇄</span>Pengajuan</button><button data-route="history"><span>☷</span>Riwayat</button><button data-route="profile"><span>◎</span>Profil</button></nav>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <dialog id="vervalRegionDialog" class="modal verval-region-dialog">
-    <div class="modal-head"><div><h3>Cek Data Verval</h3><p>Pilih provinsi dan kabupaten/kota. AgriAttend akan mengambil data langsung dari API publik SIMKOPDES dan mencocokkan nama Kopdes penempatan.</p></div><button class="close-editor" id="closeVervalRegionDialog" type="button" aria-label="Tutup">×</button></div>
-    <div class="field-block"><label for="vervalProvinceSelect">Provinsi</label><select id="vervalProvinceSelect"><option value="">Pilih provinsi terlebih dahulu</option></select></div>
-    <div class="field-block"><label for="vervalDistrictSelect">Kabupaten / Kota</label><select id="vervalDistrictSelect" disabled><option value="">Pilih provinsi terlebih dahulu</option></select></div>
-    <div class="verval-match-preview"><small>KOPDES YANG AKAN DICARI</small><b id="vervalTargetPreview">Mengikuti nama lokasi penugasan AgriConnect</b><p>Penanda garis bawah (_) pada kode penugasan akan diabaikan. AgriAttend akan menarik status aset dan statistik verifikasi wilayah yang tersedia dari API SIMKOPDES.</p></div>
-    <details class="verval-facilitator-access">
-      <summary>Akses API SIMKOPDES (digunakan bila server meminta autentikasi)</summary>
-      <p>Screenshot sebelumnya menunjukkan HTTP 403 sebelumnya berasal dari endpoint statistik Phase-2 yang bukan sumber utama data aset. AgriAttend kini tidak lagi memanggil endpoint itu sebagai syarat validasi atau pengambilan data aset. Bila endpoint data aset utama sendiri meminta autentikasi, kamu dapat memasukkan Bearer token API SIMKOPDES resmi dari akun yang berwenang. Token akan dikirim hanya ke api.simkopdes.go.id, tidak ke simkopdes.go.id maupun file JavaScript. Password AgriConnect dan passcode halaman Verval bukan Bearer token. Penyimpanan menggunakan Android Keystore.</p>
-      <div class="field-block"><label for="vervalFacilitatorId">ID pendamping SIMKOPDES</label><input id="vervalFacilitatorId" inputmode="numeric" autocomplete="off" placeholder="ID regional facilitator" /></div>
-      <div class="field-block"><label for="vervalFacilitatorToken">Bearer token API SIMKOPDES</label><input id="vervalFacilitatorToken" type="password" autocomplete="off" placeholder="Tempel token API pendamping" /></div>
-      <div class="verval-access-actions"><button class="outline-btn" id="saveVervalFacilitatorAccess" type="button">Simpan akses terenkripsi</button><button class="text-btn danger-text" id="clearVervalFacilitatorAccess" type="button">Hapus akses</button></div>
-      <small id="vervalFacilitatorAccessStatus" role="status">Belum ada Bearer token tersimpan. Bila endpoint publik mengembalikan 403, akses API resmi diperlukan.</small>
-    </details>
-    <p id="vervalRegionLoadStatus" class="verval-region-load-status" role="status">Pilih provinsi, kemudian pilih kabupaten/kota.</p>
-    <div class="modal-actions"><button class="primary-btn full" id="confirmVervalCheck" type="button" disabled>Mulai Cek Data</button></div>
-  </dialog>
   <dialog id="profileSelectDialog" class="modal"><form id="profileSelectForm"><div class="modal-head"><div><h3>Pilih profil karyawan</h3><p>Akun AgriConnect ini memiliki lebih dari satu profil.</p></div></div><div class="field-block"><label for="profileChoice">Profil</label><select id="profileChoice" required></select></div><div class="modal-actions"><button class="primary-btn" type="submit">Gunakan profil ini</button></div></form></dialog>
   <dialog id="ticketDialog" class="modal ticket-modal"><div class="modal-head"><div><h3 id="ticketTitle">Permintaan terkirim</h3><p id="ticketMessage">Respons dari AgriConnect.</p></div><button class="close-editor" id="closeTicket" aria-label="Tutup">×</button></div><div class="ticket-number" id="ticketNumber">Nomor tiket belum tersedia</div><button class="primary-btn full" id="copyTicket" type="button">Salin nomor tiket</button></dialog>
   
