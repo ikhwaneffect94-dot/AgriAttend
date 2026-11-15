@@ -253,6 +253,7 @@ async function loadOfficialProfileDetails(){
   employmentDetail=employmentResult.status==='fulfilled'?(employmentResult.value?.data??employmentResult.value):null;
   session.profileDetail=profileDetail;session.personalDetail=personalDetail;session.employmentDetail=employmentDetail;
   renderProfilePage();
+  renderVervalPage();
 }
 function chooseEmployeeProfile(profiles){
   return new Promise((resolve,reject)=>{
