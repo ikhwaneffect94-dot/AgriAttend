@@ -278,7 +278,7 @@ public final class SimkopdesVervalActivity extends Activity {
               const controls=Array.from(document.querySelectorAll('[role=combobox],input,button,[aria-haspopup=listbox]')).filter(visible);
               const control=controls.find(el=>{
                 if(excluded.includes(el)) return false;
-                const labelIds=String(el.getAttribute('aria-labelledby')||'').split(/\s+/)
+                const labelIds=String(el.getAttribute('aria-labelledby')||'').split(/\\s+/)
                   .map(id=>document.getElementById(id)?.innerText||'').join(' ');
                 const labels=el.labels?Array.from(el.labels).map(label=>label.innerText||'').join(' '):'';
                 const ownMeta=[el.id,el.name,el.placeholder,el.getAttribute('aria-label'),
