@@ -517,26 +517,35 @@ function getPlacementKopdesParts(){
   return raw?raw.split(/[_|,;]+/).map(x=>x.trim()).filter(Boolean).filter(x=>!/^kdkmp$|^kdmp$/i.test(x)):[];
 }
 function formatPlacementName(value){return String(value||'').replace(/[_|,;]+/g,' ').replace(/\s+/g,' ').trim()||'Nama Kopdes belum tersedia';}
+function removePlacementPhrase(tokens,phrase){
+  const cleanPhrase=String(phrase||'').replace(/^\\s*(?:kabupaten|kab\\.?|kecamatan|kec\\.?|kota|provinsi|prov\\.?)\\s*/i,'');
+  const words=normalizeKopdesName(cleanPhrase).split(' ').filter(Boolean);
+  if(!words.length||words.length>tokens.length)return tokens;
+  const result=[...tokens];
+  for(let i=0;i<=result.length-words.length;){
+    let match=true;
+    for(let j=0;j<words.length;j++)if(result[i+j]!==words[j]){match=false;break;}
+    if(match)result.splice(i,words.length);else i++;
+  }
+  return result;
+}
 function getPlacementKopdesSearchName(){
   const raw=getPlacementKopdes().trim();
   if(!raw)return '';
-  const parts=getPlacementKopdesParts();
-  // Preserve the final village segment for the legacy structured ID:
-  // KDKMP_<kabupaten>_<kecamatan>_<desa>.
-  if(/^(?:kdkmp|kdmp)[_|]/i.test(raw)&&parts.length>=3)
-    return formatPlacementName(parts[parts.length-1]);
-  // For ordinary names, remove only the KDKMP/KDMP prefix and keep the
-  // complete remaining name (e.g. "KDKMP Teluk Palinget" -> "Teluk Palinget").
-  return formatPlacementName(raw.replace(/^\s*(?:kdkmp|kdmp)\s*[:_|-]?\s*/i,''));
+  const placement=getPlacementRegion();
+  const body=raw.replace(/^\\s*(?:kdkmp|kdmp)\\s*[:_|-]?\\s*/i,'')
+    .replace(/[_|,;]+/g,' ').replace(/\\s+/g,' ').trim();
+  let tokens=normalizeKopdesName(body).split(' ').filter(Boolean);
+  for(const part of [placement.kabupaten,placement.kecamatan,placement.province]){
+    if(part)tokens=removePlacementPhrase(tokens,part);
+  }
+  return tokens.slice(-2).join(' ');
 }
 function getPlacementDisplayName(){
-  const raw=getPlacementKopdes(),parts=getPlacementKopdesParts();
-  const searchName=getPlacementKopdesSearchName();
-  if(/^(?:kdkmp|kdmp)[\s_|-]/i.test(raw)||parts.length>=3)
-    return `KDKMP ${searchName}`;
-  return formatPlacementName(raw);
+  const raw=getPlacementKopdes(),searchName=getPlacementKopdesSearchName();
+  if(/^(?:kdkmp|kdmp)[\\s_|-]/i.test(raw))return `KDKMP ${searchName}`;
+  return formatPlacementName(raw)||'Nama Kopdes belum tersedia';
 }
-function normalizeRegionName(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\b(kabupaten|kab\.?|kota administrasi|kota|provinsi|prov\.?)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
 function normalizeKopdesName(value){
   return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/_/g,' ')
     .replace(/\b(koperasi|desa|merah|putih|kdkmp|kdmp|kopdes|kabupaten|kab\.?|kota)\b/g,' ')
@@ -544,49 +553,76 @@ function normalizeKopdesName(value){
 }
 function getPlacementRegion(){
   const sources=[session?.employmentDetail,employmentDetail,session?.profileDetail,profileDetail,session?.profile,companyLocationData].filter(Boolean);
-  const explicitKabKeys=['kabupatenname','kabupaten','regencyname','regency','assignmentkabupaten','placementkabupaten','workkabupatenname'];
+  const regencyKeys=['kabupatenname','kabupaten','regencyname','regency','assignmentkabupaten','placementkabupaten','workkabupatenname'];
   const cityKeys=['cityname','city','assignmentcity','placementcity','workcityname'];
+  const subdistrictKeys=['kecamatanname','kecamatan','districtname','district','subdistrictname','subdistrict','assignmentkecamatan','placementkecamatan','workkecamatanname','assignmentdistrict','placementdistrict','workdistrictname'];
   const provinceKeys=['provincename','provinsiname','province','provinsi','statename','assignmentprovince','workprovincename'];
   const seen=new Set(),values=[];
   function visit(obj,depth=0){
-    if(!obj||typeof obj!=='object'||depth>5||seen.has(obj))return;seen.add(obj);
+    if(!obj||typeof obj!=='object'||depth>6||seen.has(obj))return;
+    seen.add(obj);
     for(const [key,value] of Object.entries(obj)){
       if(typeof value==='string'&&value.trim()){
         const k=key.toLowerCase(),v=value.trim();
-        if(explicitKabKeys.includes(k)||cityKeys.includes(k)||provinceKeys.includes(k))values.unshift({key:k,value:v});
-        else if(/location|placement|assignment|district|kabupaten|regency|city|office|branch|province|provinsi|address|alamat/.test(k))values.push({key:k,value:v});
+        if(regencyKeys.includes(k))values.push({kind:'regency',value:v});
+        else if(cityKeys.includes(k))values.push({kind:'city',value:v});
+        else if(subdistrictKeys.includes(k))values.push({kind:'subdistrict',value:v});
+        else if(provinceKeys.includes(k))values.push({kind:'province',value:v});
+        else if(/location|placement|assignment|address|alamat|wilayah/.test(k))values.push({kind:'text',value:v});
       }else if(value&&typeof value==='object')visit(value,depth+1);
     }
   }
-  sources.forEach(x=>visit(x));
-  const parts=getPlacementKopdesParts(),rawAssignment=getPlacementKopdes();
-  const assignmentCode=/^(?:kdkmp|kdmp)[_|]/i.test(rawAssignment);
-  let kabupaten='',province='';
-  const explicit=values.find(x=>explicitKabKeys.includes(x.key)&&! /^(?:kdkmp|kdmp)[_|]/i.test(x.value));
-  if(explicit){
-    const m=explicit.value.match(/(?:kabupaten|kab\.?|kota(?:\s+administrasi)?)\s*[:.-]?\s*([A-Za-zÀ-ÿ0-9 '\-]+?)(?=\s*[,/|·;]|\s+(?:provinsi|province)\b|$)/i);
-    kabupaten=m?((/^kota/i.test(explicit.value)?'Kota ':'Kabupaten ')+m[1].trim()):explicit.value;
-  }
-  // Assignment identifiers use KDKMP_<kabupaten>_<kecamatan>_<desa>.
-  // Their first segment is the kabupaten; don't mistake the kecamatan for it.
-  if(assignmentCode&&parts.length>=3)kabupaten=`Kabupaten ${parts[0]}`;
-  if(!kabupaten){
-    const city=values.find(x=>cityKeys.includes(x.key)&&! /^(?:kdkmp|kdmp)[_|]/i.test(x.value));
-    if(city&&normalizeRegionName(city.value)!==normalizeRegionName(rawAssignment))kabupaten=city.value;
-  }
-  const provinceEntry=values.find(x=>provinceKeys.includes(x.key));
-  if(provinceEntry)province=provinceEntry.value;
-  if(!province){
-    for(const item of values){const m=item.value.match(/(?:provinsi|province)\s*[:.-]?\s*([A-Za-zÀ-ÿ0-9 '\-]+)/i);if(m){province=m[1].trim();break;}}
-  }
-  const normalizedKab=normalizeRegionName(kabupaten);
-  const provinceByKab={
-    kapuas:'Kalimantan Tengah',kotawaringinbarat:'Kalimantan Tengah',kotawaringintimur:'Kalimantan Tengah',
-    banjar:'Kalimantan Selatan',banjarmasin:'Kalimantan Selatan',
-    baritokuala:'Kalimantan Selatan',pulangpisau:'Kalimantan Tengah'
+  sources.forEach(source=>visit(source));
+  const raw=getPlacementKopdes(),parts=getPlacementKopdesParts();
+  const code=/^(?:kdkmp|kdmp)[_|]/i.test(raw);
+  const clean=value=>String(value||'').replace(/[_]+/g,' ').replace(/\\s+/g,' ').trim();
+  const withPrefix=(value,label)=>{
+    const v=clean(value);
+    if(!v)return '';
+    if(/^(kabupaten|kab\\.?|kota|kecamatan|kec\\.?)\\b/i.test(v))return v;
+    return `${label} ${v}`;
   };
-  if(!province&&provinceByKab[normalizedKab.replace(/\s/g,'')])province=provinceByKab[normalizedKab.replace(/\s/g,'')];
-  return {kabupaten:kabupaten.trim(),province:province.trim()};
+  let kabupaten='',kecamatan='',province='';
+  const regency=values.find(x=>x.kind==='regency'),city=values.find(x=>x.kind==='city');
+  const subdistrict=values.find(x=>x.kind==='subdistrict'),prov=values.find(x=>x.kind==='province');
+  if(regency)kabupaten=withPrefix(regency.value,'Kabupaten');
+  else if(city)kabupaten=withPrefix(city.value,'Kota');
+  if(subdistrict)kecamatan=withPrefix(subdistrict.value,'Kecamatan');
+  if(prov)province=clean(prov.value);
+  for(const item of values.filter(x=>x.kind==='text')){
+    const text=item.value;
+    if(!kabupaten){
+      const m=text.match(/\\b(kabupaten|kab\\.?|kota(?:\\s+administrasi)?)\\s+([^,;|]+)/i);
+      if(m)kabupaten=withPrefix(m[2],/^kota/i.test(m[1])?'Kota':'Kabupaten');
+    }
+    if(!kecamatan){
+      const m=text.match(/\\b(kecamatan|kec\\.?|district|subdistrict)\\s+([^,;|]+)/i);
+      if(m)kecamatan=withPrefix(m[2],'Kecamatan');
+    }
+    if(!province){
+      const m=text.match(/\\b(?:provinsi|province)\\s+([^,;|]+)/i);
+      if(m)province=clean(m[1]);
+    }
+  }
+  // Structured identifiers: KDKMP_<regency>_<subdistrict>_<village>.
+  // Do not guess a multi-word kecamatan from flattened underscore fragments.
+  if(code&&parts.length>=3){
+    if(!kabupaten)kabupaten=withPrefix(parts[0],'Kabupaten');
+    if(!kecamatan&&parts.length===3)kecamatan=withPrefix(parts[1],'Kecamatan');
+  }
+  if(!province){
+    const key=normalizeRegionName(kabupaten).replace(/\\s/g,'');
+    const map={
+      kapuas:'Kalimantan Tengah',kotawaringinbarat:'Kalimantan Tengah',kotawaringintimur:'Kalimantan Tengah',
+      pulangpisau:'Kalimantan Tengah',baritoselatan:'Kalimantan Tengah',baritoutara:'Kalimantan Tengah',
+      banjar:'Kalimantan Selatan',banjarmasin:'Kalimantan Selatan',baritokuala:'Kalimantan Selatan',
+      tapin:'Kalimantan Selatan',tabalong:'Kalimantan Selatan',tanahlaut:'Kalimantan Selatan',
+      hulusungaiselatan:'Kalimantan Selatan',hulusungaitengah:'Kalimantan Selatan',hulusungaiutara:'Kalimantan Selatan',
+      kotabaru:'Kalimantan Selatan',tanahbumbu:'Kalimantan Selatan',balangan:'Kalimantan Selatan'
+    };
+    province=map[key]||'';
+  }
+  return {kabupaten:kabupaten.trim(),kecamatan:kecamatan.trim(),province:province.trim()};
 }
 function levenshteinDistance(a,b){
   if(a===b)return 0;
@@ -674,8 +710,7 @@ function renderVervalRegionalStats(){
 function renderVervalPage(){
   const placement=getPlacementRegion();
   const nameEl=$('#vervalPlacementName');if(nameEl)nameEl.textContent=getPlacementDisplayName();
-  const parts=getPlacementKopdesParts();
-  const regionParts=[parts.length>=3?`Kec. ${parts[parts.length-2]}`:'',placement.kabupaten,placement.province].filter(Boolean);
+  const regionParts=[placement.kecamatan,placement.kabupaten,placement.province].filter(Boolean);
   const regionEl=$('#vervalPlacementRegion');if(regionEl)regionEl.textContent=regionParts.join(' · ')||'Lokasi penugasan belum terbaca dari AgriConnect';
   const found=findPlacementVervalMatch(state.vervalRecords),matched=found&&!found.ambiguous?found:null;
   const statusEl=$('#vervalPlacementStatus'),batchEl=$('#vervalPlacementBatch'),resultPanel=$('#vervalPlacementResult');
@@ -1151,7 +1186,7 @@ async function recordAttendance(){
 
 function renderAll(){
   $('#welcomeName').textContent=state.profile.name?`, ${state.profile.name.split(' ')[0]}`:'!';$('#profileShortcut').textContent=initials(state.profile.name);$('#statToday').textContent=state.attendance.filter(a=>new Date(a.recordedAt).toDateString()===new Date().toDateString()).length;
-  $('#statLocations').textContent=state.locations.length;$('#statCorrections').textContent=state.corrections.length;
+  $('#statCorrections').textContent=state.corrections.length;
   if(state.noticeDismissed) $('.notice-banner:not(.compact-notice)').style.display='none';
   renderRecent();renderHistory();renderLocations();renderVervalPage();updateGpsUI();
 }
