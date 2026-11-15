@@ -27,8 +27,11 @@ Included integration:
 - Optional account-scoped facilitator asset lookup uses the user's own authorized Bearer token and regional-facilitator ID, stored with Android Keystore. The shared Verval page passcode is not an API token.
 
 Not verified in this environment:
-- Live SIMKOPDES HTTP access, current JavaScript cipher bundle, API payload decryption, or lookup against a real assignment. The live SIMKOPDES server is not reachable from this build environment.
-- Full live SIMKOPDES lookup and matching to a real assignment. Android Gradle build and APK assembly are verified by the GitHub Actions workflow for this branch; live API behavior still requires an authorized device/network.
-- Protected-page Batch 1-4 and non-priority fields are not exposed by the documented public API responses used here. They are not inferred from asset status or aggregate construction statistics.
+- Live SIMKOPDES HTTP access, API payload decryption, and matching against a real assignment. These require testing on an authorized Android device/network.
+- Protected-page Batch 1–4 and non-priority fields are not exposed by the documented public API responses used here. They are not inferred from asset status or aggregate construction statistics.
+
+Build verification:
+- GitHub Actions run `43680394178` completed successfully for commit `e0d172220278ef865d070600fecfab878dd68143`.
+- Static source checks, Android Gradle build, APK output verification, and artifact upload all passed.
 
 The main app shell keeps its WebView only to render the bundled local AgriAttend UI. SIMKOPDES retrieval itself is performed by native HTTPS API calls and does not open the SIMKOPDES website in any WebView.
