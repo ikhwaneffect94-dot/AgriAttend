@@ -31,11 +31,12 @@ import java.util.Locale;
  * page's own form, and the resulting table is parsed back into AgriAttend.
  */
 public final class SimkopdesVervalActivity extends Activity {
-    private static final String PORTAL_URL =
-            "https://simkopdes.go.id/pers/asset/verval?batch_verification=1%2C2%2C3%2C4";
+    private static final String PORTAL_URL = "https://simkopdes.go.id/pers/asset/verval";
     private static final String EXTRA_PROVINCE = "province";
-    private static final String EXTRA_DISTRICT = "district";
+    private static final String EXTRA_REGENCY = "regency";
+    private static final String EXTRA_SUBDISTRICT = "subdistrict";
     private static final String EXTRA_ASSIGNMENT = "assignment";
+    private static final String EXTRA_SEARCH_NAME = "search_name";
 
     private WebView webView;
     private ProgressBar progressBar;
@@ -44,15 +45,19 @@ public final class SimkopdesVervalActivity extends Activity {
     private boolean automationStarted = false;
     private volatile boolean passcodeSubmitted = false;
     private String province = "";
-    private String district = "";
+    private String regency = "";
+    private String subdistrict = "";
     private String assignment = "";
+    private String searchName = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         province = clean(getIntent().getStringExtra(EXTRA_PROVINCE));
-        district = clean(getIntent().getStringExtra(EXTRA_DISTRICT));
+        regency = clean(getIntent().getStringExtra(EXTRA_REGENCY));
+        subdistrict = clean(getIntent().getStringExtra(EXTRA_SUBDISTRICT));
         assignment = clean(getIntent().getStringExtra(EXTRA_ASSIGNMENT));
+        searchName = clean(getIntent().getStringExtra(EXTRA_SEARCH_NAME));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -70,7 +75,7 @@ public final class SimkopdesVervalActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         TextView region = new TextView(this);
-        region.setText(province + " · " + district);
+        region.setText(province + " · " + regency + " · Kecamatan " + subdistrict);
         region.setTextColor(Color.rgb(82, 101, 94));
         region.setTextSize(14);
         region.setGravity(Gravity.CENTER);
@@ -170,15 +175,15 @@ public final class SimkopdesVervalActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         setContentView(root);
 
-        if (province.isEmpty() || district.isEmpty() || assignment.isEmpty()) {
-            fail("Provinsi, kabupaten/kota, atau nama Kopdes penugasan belum lengkap.");
+        if (province.isEmpty() || regency.isEmpty() || subdistrict.isEmpty() || assignment.isEmpty() || searchName.isEmpty()) {
+            fail("Provinsi, kabupaten, kecamatan, atau nama koperasi penugasan belum lengkap.");
             return;
         }
 
         webView.loadUrl(PORTAL_URL);
         webView.postDelayed(() -> {
             if (!completed) fail("Waktu tunggu 60 detik habis. Portal tidak menyelesaikan pemuatan data. Coba lagi; proses tidak dibiarkan berputar tanpa batas.");
-        }, 60000);
+        }, 90000);
     }
 
     private String buildAutomationScript() {
@@ -186,14 +191,11 @@ public final class SimkopdesVervalActivity extends Activity {
         return String.format(Locale.ROOT, """
         (async function(){
           const province = %s;
-          const district = %s;
+          const regency = %s;
+          const subdistrict = %s;
           const assignment = %s;
+          const assignmentSearchName = %s;
           const passcode = %s;
-          const assignmentParts = String(assignment || '').split(/[_|,;]+/).map(value=>value.trim()).filter(value=>value && !/^(kdkmp|kdmp)$/i.test(value));
-          let assignmentSearchName = '';
-          if(/^\\s*(?:kdkmp|kdmp)[_|]/i.test(String(assignment||'')) && assignmentParts.length>=3) assignmentSearchName=assignmentParts[assignmentParts.length-1];
-          else assignmentSearchName=String(assignment||'').replace(/^\\s*(?:kdkmp|kdmp)\\s*[:_|-]?\\s*/i,'');
-          assignmentSearchName=assignmentSearchName.replace(/^\\s*(?:desa|kelurahan)\\s+/i,'').replace(/[_|,;]+/g,' ').replace(/\\s+/g,' ').trim();
           const bridge = window.AgriVervalBridge;
           const norm = value => String(value || '').normalize('NFD')
             .replace(/[\\u0300-\\u036f]/g,'').toLowerCase()
@@ -211,6 +213,10 @@ public final class SimkopdesVervalActivity extends Activity {
             return {
               url: location.href,
               title: document.title,
+              requestedProvince:province,
+              requestedRegency:regency,
+              requestedSubdistrict:subdistrict,
+              assignmentSearchName:assignmentSearchName,
               text: (document.body && document.body.innerText || '').replace(/\\s+/g,' ').slice(0,1800),
               selects: Array.from(document.querySelectorAll('select')).slice(0,25).map(s=>({
                 id:s.id, name:s.name, aria:s.getAttribute('aria-label'),
@@ -251,14 +257,16 @@ public final class SimkopdesVervalActivity extends Activity {
             return false;
           }
           async function chooseRegion(target,kind,exclude){
+            const excluded=Array.isArray(exclude)?exclude.filter(Boolean):[exclude].filter(Boolean);
             for(let attempt=0;attempt<24;attempt++){
               const selects=visibleSelects();
-              const select=selects.find(s=>s!==exclude && optionFor(s,target));
+              const select=selects.find(s=>!excluded.includes(s) && optionFor(s,target));
               if(select && setSelect(select,target)) return {select,method:'select'};
-              const pattern=kind==='province'?/provinsi|province/i:/kabupaten|kab\\.?|kota|regency|city/i;
+              const pattern=kind==='province'?/provinsi|province/i:
+                kind==='regency'?/kabupaten|kab\\.?|kota|regency|city/i:/kecamatan|kec\\.?|subdistrict/i;
               const controls=Array.from(document.querySelectorAll('[role=combobox],input,button,[aria-haspopup=listbox]')).filter(visible);
               const control=controls.find(el=>{
-                if(el===exclude) return false;
+                if(excluded.includes(el)) return false;
                 const meta=[el.id,el.name,el.placeholder,el.getAttribute('aria-label'),
                   el.getAttribute('data-placeholder'),el.parentElement && el.parentElement.innerText].join(' ');
                 return pattern.test(meta);
@@ -279,15 +287,22 @@ public final class SimkopdesVervalActivity extends Activity {
               bridge.onComplete(JSON.stringify({success:false,message:'Pilihan provinsi pada form SIMKOPDES tidak terdeteksi.',diagnostics:snapshot()}));
               return;
             }
-            report('Provinsi terpilih. Memuat pilihan kabupaten/kota…');
-            await sleep(500);
-            const d = await chooseRegion(district,'district',p.select);
+            report('Provinsi terpilih. Memuat pilihan Kabupaten/Kota…');
+            await sleep(650);
+            const d = await chooseRegion(regency,'regency',[p.select]);
             if(!d){
-              bridge.onComplete(JSON.stringify({success:false,message:'Pilihan kabupaten/kota tidak terdeteksi setelah provinsi dipilih.',diagnostics:snapshot()}));
+              bridge.onComplete(JSON.stringify({success:false,message:'Kabupaten/kota penugasan tidak terdeteksi setelah provinsi dipilih.',diagnostics:snapshot()}));
               return;
             }
-            report('Kabupaten/kota terpilih. Mengisi passcode Verval secara otomatis…');
-            await sleep(250);
+            report('Kabupaten '+regency+' terpilih. Memuat pilihan Kecamatan '+subdistrict+'…');
+            await sleep(650);
+            const k = await chooseRegion(subdistrict,'subdistrict',[p.select,d.select]);
+            if(!k){
+              bridge.onComplete(JSON.stringify({success:false,message:'Kecamatan '+subdistrict+' tidak ditemukan pada pilihan portal setelah Kabupaten '+regency+' dipilih.',diagnostics:snapshot()}));
+              return;
+            }
+            report('Kecamatan '+subdistrict+' terpilih. Menyiapkan pencarian '+assignmentSearchName+'…');
+            await sleep(350);
             const passInput = Array.from(document.querySelectorAll('input,textarea')).filter(visible).find(el=>{
               const meta=[el.type,el.id,el.name,el.placeholder,el.getAttribute('aria-label'),el.getAttribute('autocomplete')].join(' ');
               return el.type==='password' || /passcode|passkey|password|kode.?akses|kata.?sandi|pin/i.test(meta);
@@ -653,7 +668,7 @@ public final class SimkopdesVervalActivity extends Activity {
             const records=Array.from(uniqueRows.values());
             if(records.length){
               bridge.onComplete(JSON.stringify({
-                success:true,records:records,province:province,district:district,
+                success:true,records:records,province:province,regency:regency,subdistrict:subdistrict,assignment:assignment,searchName:assignmentSearchName,
                 source:'Halaman Verval SIMKOPDES · seluruh kategori yang terbaca',
                 updatedAt:new Date().toISOString(),tableCount:tableCounts.count,
                 rowCount:records.length,coverage:coverage,
@@ -684,8 +699,10 @@ public final class SimkopdesVervalActivity extends Activity {
         })();
         """,
                 JSONObject.quote(province),
-                JSONObject.quote(district),
+                JSONObject.quote(regency),
+                JSONObject.quote(subdistrict),
                 JSONObject.quote(assignment),
+                JSONObject.quote(searchName),
                 JSONObject.quote(passcode));
     }
 
@@ -724,8 +741,10 @@ public final class SimkopdesVervalActivity extends Activity {
             JSONObject result = new JSONObject(json == null ? "{}" : json);
             if (!result.has("success")) result.put("success", false);
             result.put("requestedProvince", province);
-            result.put("requestedDistrict", district);
+            result.put("requestedRegency", regency);
+            result.put("requestedSubdistrict", subdistrict);
             result.put("assignment", assignment);
+            result.put("searchName", searchName);
             result.put("passcodeSubmitted", passcodeSubmitted);
             Intent data = new Intent();
             data.putExtra("verval_result_json", result.toString());
@@ -737,8 +756,10 @@ public final class SimkopdesVervalActivity extends Activity {
                 failure.put("message", "Hasil Verval tidak dapat dikirim ke AgriAttend: " + error.getMessage());
                 failure.put("records", new JSONArray());
                 failure.put("province", province);
-                failure.put("district", district);
+                failure.put("regency", regency);
+                failure.put("subdistrict", subdistrict);
                 failure.put("assignment", assignment);
+                failure.put("searchName", searchName);
                 failure.put("passcodeSubmitted", passcodeSubmitted);
                 Intent data = new Intent();
                 data.putExtra("verval_result_json", failure.toString());
@@ -758,8 +779,10 @@ public final class SimkopdesVervalActivity extends Activity {
             result.put("success", false);
             result.put("message", message);
             result.put("province", province);
-            result.put("district", district);
+            result.put("regency", regency);
+            result.put("subdistrict", subdistrict);
             result.put("assignment", assignment);
+            result.put("searchName", searchName);
             result.put("records", new JSONArray());
             Intent data = new Intent();
             data.putExtra("verval_result_json", result.toString());
