@@ -300,14 +300,14 @@ final class SimkopdesPublicApi {
         cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(candidate.key, "AES"), new IvParameterSpec(candidate.iv));
         byte[] padded = cipher.doFinal(ciphertext);
         if (padded.length == 0) throw new IllegalStateException("Hasil dekripsi kosong.");
+        // Match the public extractor's PKCS7 behavior exactly: CryptoJS/Python
+        // use the final byte as the unpadding length and do not verify every
+        // preceding padding byte. This avoids rejecting payloads that the
+        // SIMKOPDES browser client accepts.
         int padding = padded[padded.length - 1] & 0xff;
-        if (padding < 1 || padding > 16 || padding > padded.length) {
-            throw new IllegalStateException("Padding PKCS7 tidak valid.");
-        }
-        for (int i = padded.length - padding; i < padded.length; i++) {
-            if ((padded[i] & 0xff) != padding) throw new IllegalStateException("Byte padding PKCS7 tidak konsisten.");
-        }
-        byte[] plainBytes = Arrays.copyOf(padded, padded.length - padding);
+        byte[] plainBytes = (padding >= 1 && padding <= 16 && padding <= padded.length)
+                ? Arrays.copyOf(padded, padded.length - padding)
+                : padded;
         String plain = new String(plainBytes, StandardCharsets.UTF_8).replaceFirst("^\\uFEFF", "").trim();
         return parseJsonPayload(plain);
     }
@@ -584,6 +584,12 @@ final class SimkopdesPublicApi {
         String fingerprint = secret + "|" + ivText;
         if (!seen.add(fingerprint)) return;
         byte[] key = MessageDigest.getInstance("SHA-256").digest(secret.getBytes(StandardCharsets.UTF_8));
+        // Also compare the derived bytes against existing candidates. The
+        // fallback key may be identical to the live bundle key even if it was
+        // added through a separate discovery set.
+        for (CipherParameters existing : output) {
+            if (Arrays.equals(existing.key, key) && Arrays.equals(existing.iv, iv)) return;
+        }
         output.add(new CipherParameters(key, iv));
     }
 
