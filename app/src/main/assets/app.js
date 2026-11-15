@@ -519,7 +519,7 @@ function getPlacementKopdesParts(){
 }
 function formatPlacementName(value){return String(value||'').replace(/[_|,;]+/g,' ').replace(/\s+/g,' ').trim()||'Nama Kopdes belum tersedia';}
 function removePlacementPhrase(tokens,phrase){
-  const cleanPhrase=String(phrase||'').replace(/^\\s*(?:kabupaten|kab\\.?|kecamatan|kec\\.?|kota|provinsi|prov\\.?)\\s*/i,'');
+  const cleanPhrase=String(phrase||'').replace(/^\s*(?:kabupaten|kab\.?|kecamatan|kec\.?|kota|provinsi|prov\.?)\s*/i,'');
   const words=normalizeKopdesName(cleanPhrase).split(' ').filter(Boolean);
   if(!words.length||words.length>tokens.length)return tokens;
   const result=[...tokens];
@@ -534,8 +534,8 @@ function getPlacementKopdesSearchName(){
   const raw=getPlacementKopdes().trim();
   if(!raw)return '';
   const placement=getPlacementRegion();
-  const body=raw.replace(/^\\s*(?:kdkmp|kdmp)\\s*[:_|-]?\\s*/i,'')
-    .replace(/[_|,;]+/g,' ').replace(/\\s+/g,' ').trim();
+  const body=raw.replace(/^\s*(?:kdkmp|kdmp)\s*[:_|-]?\s*/i,'')
+    .replace(/[_|,;]+/g,' ').replace(/\s+/g,' ').trim();
   let tokens=normalizeKopdesName(body).split(' ').filter(Boolean);
   for(const part of [placement.kabupaten,placement.kecamatan,placement.province]){
     if(part)tokens=removePlacementPhrase(tokens,part);
@@ -544,7 +544,7 @@ function getPlacementKopdesSearchName(){
 }
 function getPlacementDisplayName(){
   const raw=getPlacementKopdes(),searchName=getPlacementKopdesSearchName();
-  if(/^(?:kdkmp|kdmp)[\\s_|-]/i.test(raw))return `KDKMP ${searchName}`;
+  if(/^(?:kdkmp|kdmp)[\s_|-]/i.test(raw))return \`KDKMP \${searchName}\`;
   return formatPlacementName(raw)||'Nama Kopdes belum tersedia';
 }
 function normalizeKopdesName(value){
@@ -576,12 +576,12 @@ function getPlacementRegion(){
   sources.forEach(source=>visit(source));
   const raw=getPlacementKopdes(),parts=getPlacementKopdesParts();
   const code=/^(?:kdkmp|kdmp)[_|]/i.test(raw);
-  const clean=value=>String(value||'').replace(/[_]+/g,' ').replace(/\\s+/g,' ').trim();
+  const clean=value=>String(value||'').replace(/[_]+/g,' ').replace(/\s+/g,' ').trim();
   const withPrefix=(value,label)=>{
     const v=clean(value);
     if(!v)return '';
-    if(/^(kabupaten|kab\\.?|kota|kecamatan|kec\\.?)\\b/i.test(v))return v;
-    return `${label} ${v}`;
+    if(/^(kabupaten|kab\.?|kota|kecamatan|kec\.?)\b/i.test(v))return v;
+    return \`\${label} \${v}\`;
   };
   let kabupaten='',kecamatan='',province='';
   const regency=values.find(x=>x.kind==='regency'),city=values.find(x=>x.kind==='city');
@@ -593,26 +593,26 @@ function getPlacementRegion(){
   for(const item of values.filter(x=>x.kind==='text')){
     const text=item.value;
     if(!kabupaten){
-      const m=text.match(/\\b(kabupaten|kab\\.?|kota(?:\\s+administrasi)?)\\s+([^,;|]+)/i);
+      const m=text.match(/\b(kabupaten|kab\.?|kota(?:\s+administrasi)?)\s+([^,;|]+)/i);
       if(m)kabupaten=withPrefix(m[2],/^kota/i.test(m[1])?'Kota':'Kabupaten');
     }
     if(!kecamatan){
-      const m=text.match(/\\b(kecamatan|kec\\.?|district|subdistrict)\\s+([^,;|]+)/i);
+      const m=text.match(/\b(kecamatan|kec\.?|district|subdistrict)\s+([^,;|]+)/i);
       if(m)kecamatan=withPrefix(m[2],'Kecamatan');
     }
     if(!province){
-      const m=text.match(/\\b(?:provinsi|province)\\s+([^,;|]+)/i);
+      const m=text.match(/\b(?:provinsi|province)\s+([^,;|]+)/i);
       if(m)province=clean(m[1]);
     }
   }
   // Structured identifiers: KDKMP_<regency>_<subdistrict>_<village>.
-  // Do not guess a multi-word kecamatan from flattened underscore fragments.
+  // Do not guess multi-word kecamatan names from flattened underscore fragments.
   if(code&&parts.length>=3){
     if(!kabupaten)kabupaten=withPrefix(parts[0],'Kabupaten');
     if(!kecamatan&&parts.length===3)kecamatan=withPrefix(parts[1],'Kecamatan');
   }
   if(!province){
-    const key=normalizeRegionName(kabupaten).replace(/\\s/g,'');
+    const key=normalizeRegionName(kabupaten).replace(/\s/g,'');
     const map={
       kapuas:'Kalimantan Tengah',kotawaringinbarat:'Kalimantan Tengah',kotawaringintimur:'Kalimantan Tengah',
       pulangpisau:'Kalimantan Tengah',baritoselatan:'Kalimantan Tengah',baritoutara:'Kalimantan Tengah',
