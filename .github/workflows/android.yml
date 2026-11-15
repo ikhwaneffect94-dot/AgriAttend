@@ -78,7 +78,7 @@ jobs:
           import xml.etree.ElementTree as ET
           ET.parse('app/src/main/AndroidManifest.xml')
           text = open('app/build.gradle', encoding='utf-8').read()
-          assert "versionCode 29" in text and "versionName '1.7.0'" in text
+          assert "versionCode 30" in text and "versionName '1.7.1'" in text
           print('Manifest XML and version metadata OK')
           PY
 
@@ -93,7 +93,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgriAttend-debug-APK-v1.7.0
+          name: AgriAttend-debug-APK-v1.7.1
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
