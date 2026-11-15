@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.6.1';
+const CLIENT_VERSION = '1.6.2';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
@@ -688,10 +688,14 @@ window.__vervalDirectResult=function(payload){
   }finally{if(btn){btn.disabled=false;btn.textContent='✓ Cek Data Verval';}}
 };
 function setVervalRegionLoadStatus(message,isError=false){const el=$('#vervalRegionLoadStatus');if(el){el.textContent=message;el.classList.toggle('verval-error',!!isError);}}
-function populateVervalProvinces(){
-  const select=$('#vervalProvinceSelect');if(!select)return;
+function populateVervalProvinces(selectedProvince=''){
+  const select=$('#vervalProvinceSelect');if(!select)return '';
   select.innerHTML='<option value="">Pilih provinsi</option>'+VERVAL_PROVINCES.map(([id,name])=>`<option value="${id}">${esc(name)}</option>`).join('');
-  select.value='';select.dataset.initialized='1';
+  const normalized=normalizeRegionName(selectedProvince);
+  const detected=VERVAL_PROVINCES.find(([,name])=>normalizeRegionName(name)===normalized);
+  select.value=detected?detected[0]:'';
+  select.dataset.initialized='1';
+  return select.value;
 }
 async function loadVervalRegencies(provinceId){
   const requestToken=++vervalRegionLoadToken;
@@ -701,43 +705,50 @@ async function loadVervalRegencies(provinceId){
   setVervalRegionLoadStatus('Memuat daftar kabupaten/kota untuk provinsi yang dipilih…');
   if(!provinceId){select.innerHTML='<option value="">Pilih provinsi terlebih dahulu</option>';return;}
   let rows=[],fallback=false;
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),12000);
   try{
-    const response=await fetch(`https://www.emsifa.com/api-wilayah-indonesia/v2/regencies/${encodeURIComponent(provinceId)}.json`,{headers:{Accept:'application/json'},cache:'force-cache'});
+    const response=await fetch(`https://www.emsifa.com/api-wilayah-indonesia/v2/regencies/${encodeURIComponent(provinceId)}.json`,{headers:{Accept:'application/json'},cache:'force-cache',signal:controller.signal});
     if(!response.ok)throw new Error(`HTTP ${response.status}`);
     const json=await response.json(),list=Array.isArray(json)?json:(Array.isArray(json?.data)?json.data:[]);
     rows=list.map(x=>({id:String(x.id||x.code||''),name:String(x.name||x.nama||'').trim()})).filter(x=>x.name);
   }catch(_){fallback=true;}
+  finally{clearTimeout(timeout);}
   if(requestToken!==vervalRegionLoadToken)return;
   if(!rows.length)rows=(VERVAL_FALLBACK_REGENCIES[provinceId]||[]).map(name=>({id:'',name}));
   const placement=getPlacementRegion();
   const provinceName=VERVAL_PROVINCES.find(x=>x[0]===provinceId)?.[1]||'';
+  const samePlacementProvince=normalizeRegionName(placement.province)===normalizeRegionName(provinceName);
   const suggested=placement.kabupaten;
-  if(suggested&&normalizeRegionName(placement.province)===normalizeRegionName(provinceName)&&!rows.some(x=>normalizeRegionName(x.name)===normalizeRegionName(suggested))){
+  if(samePlacementProvince&&suggested&&!rows.some(x=>normalizeRegionName(x.name)===normalizeRegionName(suggested))){
     const clean=suggested.replace(/^(kabupaten|kab\.?|kota)\s*/i,'');
     rows.unshift({id:'',name:/^kota\b/i.test(suggested)?`Kota ${clean}`:`Kabupaten ${clean}`});
   }
   rows.sort((a,b)=>a.name.localeCompare(b.name,'id'));
   if(!rows.length){select.innerHTML='<option value="">Daftar kabupaten/kota tidak tersedia</option>';setVervalRegionLoadStatus('Daftar wilayah belum dapat diambil. Coba lagi ketika koneksi tersedia.',true);return;}
   select.innerHTML='<option value="">Pilih kabupaten/kota</option>'+rows.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');
-  select.value='';select.disabled=false;
-  if(confirm)confirm.disabled=true;
-  const suggestionText=suggested&&normalizeRegionName(placement.province)===normalizeRegionName(provinceName)?` Lokasi penugasan terdeteksi di ${suggested}; pilih wilayah tersebut bila sesuai.`:'';
+  const preferred=samePlacementProvince&&suggested?rows.find(x=>normalizeRegionName(x.name)===normalizeRegionName(suggested)):null;
+  select.value=preferred?preferred.name:'';
+  select.disabled=false;
+  if(confirm)confirm.disabled=!select.value;
+  const suggestionText=preferred?` Lokasi penugasan (${preferred.name}) dipilih otomatis; pastikan wilayahnya sesuai.`:(samePlacementProvince&&suggested?` Lokasi penugasan terdeteksi di ${suggested}; pilih wilayah tersebut bila sesuai.`:'');
   setVervalRegionLoadStatus(`${rows.length} kabupaten/kota tersedia.${fallback?' Referensi daring gagal; memakai daftar cadangan yang tersedia.':''}${suggestionText}`);
 }
 function openVervalRegionDialog(){
   if(!session){showAuth('Login AgriConnect diperlukan untuk mencocokkan lokasi penugasan.');return;}
   const provinceSelect=$('#vervalProvinceSelect'),districtSelect=$('#vervalDistrictSelect'),dialog=$('#vervalRegionDialog');
   vervalRegionLoadToken++;
-  populateVervalProvinces();
-  provinceSelect.value='';
-  districtSelect.disabled=true;districtSelect.innerHTML='<option value="">Pilih provinsi terlebih dahulu</option>';
+  const parts=getPlacementKopdesParts(),placement=getPlacementRegion();
+  const provinceId=populateVervalProvinces(placement.province);
+  districtSelect.disabled=true;
+  districtSelect.innerHTML=provinceId?'<option value="">Memuat kabupaten/kota penugasan…</option>':'<option value="">Pilih provinsi terlebih dahulu</option>';
   $('#confirmVervalCheck').disabled=true;
   const preview=$('#vervalTargetPreview');if(preview)preview.textContent=getPlacementDisplayName();
   refreshVervalFacilitatorAccessInfo();
-  const parts=getPlacementKopdesParts(),placement=getPlacementRegion();
   const hint=parts.length>=3?`Target nama: ${parts[parts.length-1]}. Wilayah penugasan terbaca: ${placement.kabupaten||'Kabupaten belum terdeteksi'}${placement.province?' · '+placement.province:''}.`:'';
-  setVervalRegionLoadStatus(hint+' Pilih provinsi terlebih dahulu, kemudian pilih kabupaten/kota.');
+  setVervalRegionLoadStatus(hint+(provinceId?' Memuat kabupaten/kota penugasan secara otomatis…':' Pilih provinsi terlebih dahulu, kemudian pilih kabupaten/kota.'));
   if(dialog&&!dialog.open)dialog.showModal();
+  if(provinceId)loadVervalRegencies(provinceId).catch(error=>setVervalRegionLoadStatus(error.message||'Gagal memuat kabupaten/kota.',true));
 }
 function refreshVervalFacilitatorAccessInfo(){
   const status=$('#vervalFacilitatorAccessStatus');
