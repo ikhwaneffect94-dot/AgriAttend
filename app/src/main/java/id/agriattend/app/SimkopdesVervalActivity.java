@@ -440,9 +440,10 @@ public final class SimkopdesVervalActivity extends Activity {
               })||null;
             }
 
-            async function waitForTableChange(previousSignature,maxWait=7000){
-              for(let attempt=0;attempt<14;attempt++){
-                await sleep(500);
+            async function waitForTableChange(previousSignature,maxWait=1400){
+              const deadline=Date.now()+maxWait;
+              while(Date.now()<deadline){
+                await sleep(200);
                 const current=extractCurrentRows('').records.map(row=>row.sourceText).join('¦').slice(0,12000);
                 if(current && current!==previousSignature) return true;
               }
