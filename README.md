@@ -1,33 +1,33 @@
-# AgriAttend Android Ready v1.7.1
+# AgriAttend Android Ready v1.7.4
 
 AgriAttend is an Android companion client for AgriConnect HRIS.
 
-## SIMKOPDES Verval — focused and reliable result flow
+## SIMKOPDES Verval
 
-AgriAttend reads the assigned cooperative, province, and regency/city from the AgriConnect placement card. If all three are available, it starts Verval directly for that region without reopening the province/regency picker. The manual picker remains as a fallback only when the profile does not contain complete placement data.
+AgriAttend reads the placement hierarchy and assigned cooperative from the AgriConnect employee profile. The lookup distinguishes Province, Regency/City, Kecamatan, and the cooperative search phrase.
 
-The official SIMKOPDES Verval form runs in an invisible internal WebView. It submits the shared passcode, searches detected Batch 1–4 and Non Prioritas category controls, collects result-table rows, follows enabled pagination up to six pages per category, and maps the matching cooperative to the AgriAttend Verval card.
+Expected example for this assignment:
+- Province: Kalimantan Tengah
+- Regency: Kabupaten Kapuas
+- Kecamatan: Pulau Petak
+- Cooperative search phrase: Teluk Palinget
 
-### v1.7.1 fixes
+The cooperative search phrase is created separately from the raw KDKMP code: remove the KDKMP prefix, remove known region components, and retain the final two cooperative-name words. The automation sends Province → Regency/City → Kecamatan to the official SIMKOPDES Verval page before entering the shared passcode.
 
-- Removed a duplicate run().catch(...) wrapper that could make the injected Verval JavaScript invalid.
-- The hidden WebView now receives a full responsive viewport while remaining transparent and non-interactive. The earlier 1×1 viewport could cause the official responsive page to render incorrectly.
-- Success, not-found, ambiguous, and error callbacks explicitly update and re-render the Verval card.
-- Error responses clear the checking state, restore the action button, and show the actual error on the card.
-- A 70-second client watchdog prevents an endless loading state if the native page workflow does not return a result.
-- The native WebView workflow has a 60-second timeout and returns a clear failure message.
-- GitHub Actions checks the Verval runner count, responsive WebView layout, callback rendering, and watchdog in addition to JavaScript syntax and Android packaging.
+The official page is opened inside a transparent, non-interactive WebView. The app removes the old Batch 1–4-only URL query so the portal can expose Non Prioritas. Detected Non Prioritas is scanned first, followed by other detected categories if the assigned cooperative is not found. Table filtering and matching are still dependent on the live portal structure and the account's permission.
 
-### Category search and limits
+The app does not bypass sign-in, CAPTCHA, or server-side restrictions. If the portal does not expose cooperative-level records to the current account, AgriAttend reports the result as unavailable rather than fabricating a match.
 
-The page runtime visits detected Batch 1, Batch 2, Batch 3, Batch 4, Prioritas, and Non Prioritas controls and records the categories that were actually found. It follows enabled pagination up to six pages per category for a faster targeted lookup. If a category control is not exposed, or pagination exceeds the six-page limit, the result is marked as incomplete; AgriAttend does not claim that every row was checked.
+## v1.7.4 changes
 
-The automation depends on the live SIMKOPDES page structure. It does not bypass CAPTCHA, account login, or server-side access restrictions. The shared passcode remains embedded in the APK for automatic entry and can be recovered through reverse engineering.
+- Added a separate Kecamatan field to placement extraction and the official portal selection flow.
+- Added a Kecamatan selector to the manual fallback region picker.
+- Corrected cooperative-name parsing to search the final two words, such as **Teluk Palinget**, instead of the KDKMP identifier.
+- Removed the Batch 1–4-only query parameter from the official Verval URL.
+- Removed the Home statistic card for saved work locations.
+- Added a small `© ikhwan_effect` footer credit.
+- Checked user-facing source strings for explicit AI-related wording; none was found in the inspected UI files.
 
 ## AgriConnect
 
-Authentication, employee profile/assignment, timesheet, attendance, correction/backdate requests, shift-change requests, payroll, and request status continue to use the authenticated AgriConnect tenant API.
-
-## Build
-
-GitHub Actions builds the debug APK, checks the PWA JavaScript and generated Verval script syntax, verifies Android manifest/version metadata, and uploads the artifact.
+Authentication, profile/assignment, timesheet, attendance submission, correction requests, and payroll use the configured AgriConnect tenant APIs.
