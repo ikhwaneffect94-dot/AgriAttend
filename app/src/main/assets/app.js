@@ -534,7 +534,7 @@ async function refreshProfileData(){
   }catch(e){showToast('Gagal memuat profil: '+e.message);}
   finally{if(btn){btn.disabled=false;btn.textContent='Muat ulang profil ↻';}}
 }
-function normalizeRegionText(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\b(kabupaten|kab\.?|kota administrasi|kota)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
+function normalizeRegionText(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\b(kabupaten|kab\.?|kota administrasi|kota|provinsi|province|kecamatan|kec\\.?|district|subdistrict)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
 function normalizeRegionName(value){return normalizeRegionText(value);}
 function getPlacementKopdes(){
   const sources=[session?.employmentDetail,employmentDetail,session?.profileDetail,profileDetail,session?.profile].filter(Boolean);
