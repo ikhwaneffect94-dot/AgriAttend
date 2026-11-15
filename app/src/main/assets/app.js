@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.7.9';
+const CLIENT_VERSION = '1.8.0';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
@@ -823,8 +823,13 @@ function setVervalStatus(message,isError=false){const el=$('#vervalLiveStatus');
 window.__vervalDirectStatus=function(message){setVervalStatus(String(message||'Mengambil data langsung dari SIMKOPDES…'));};
 function getFriendlyVervalError(result){
   const raw=String(result?.message||'Data Verval tidak berhasil dibaca.').replace(/\s+/g,' ').trim();
-  if(/kecamatan.*(tidak ditemukan|belum tersedia)|pilihan kecamatan/i.test(raw))
+  if(/pilihan kecamatan|kecamatan.*(tidak ditemukan|belum tersedia)/i.test(raw)){
+    const debug=result?.regionDebug;
+    if(debug&&Number.isFinite(Number(debug.controlCount))&&Number.isFinite(Number(debug.selectCount))){
+      return 'Pilihan Kecamatan belum terbaca setelah Kabupaten dipilih (kontrol wilayah: '+debug.controlCount+', elemen select: '+debug.selectCount+'). Data aset belum ditarik.';
+    }
     return 'Pilihan Kecamatan penugasan belum tersedia di portal SIMKOPDES. Data aset belum berhasil ditarik; periksa wilayah lalu coba lagi.';
+  }
   if(/kabupaten|kota.*(tidak terdeteksi|tidak ditemukan)|regency/i.test(raw))
     return 'Pilihan kabupaten/kota belum berhasil dimuat dari portal SIMKOPDES. Periksa wilayah penugasan lalu coba lagi.';
   if(/403|forbidden|unauthorized|tidak memiliki akses|akses ditolak/i.test(raw))
@@ -835,6 +840,7 @@ function getFriendlyVervalError(result){
     return 'Portal SIMKOPDES mengembalikan informasi teknis, bukan data aset. Periksa pilihan wilayah lalu ulangi pemeriksaan.';
   return cleanVervalDisplayText(raw,180)||'Portal SIMKOPDES belum mengembalikan data aset. Silakan coba lagi.';
 }
+
 window.__vervalDirectResult=function(payload){
   clearTimeout(vervalRequestTimer);vervalRequestTimer=null;
   const btn=$('#openVervalCheckDialog');
