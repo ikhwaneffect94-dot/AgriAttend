@@ -237,12 +237,12 @@
     <div class="field-block"><label for="vervalDistrictSelect">Kabupaten / Kota</label><select id="vervalDistrictSelect" disabled><option value="">Pilih provinsi terlebih dahulu</option></select></div>
     <div class="verval-match-preview"><small>KOPDES YANG AKAN DICARI</small><b id="vervalTargetPreview">Mengikuti nama lokasi penugasan AgriConnect</b><p>Penanda garis bawah (_) pada kode penugasan akan diabaikan. AgriAttend akan menarik status aset dan statistik verifikasi wilayah yang tersedia dari API SIMKOPDES.</p></div>
     <details class="verval-facilitator-access">
-      <summary>Akses API khusus pendamping (opsional)</summary>
-      <p>Hanya diperlukan untuk endpoint aset khusus pendamping. Masukkan ID pendamping dan Bearer token API SIMKOPDES milik akun yang berwenang. Kode passcode halaman Verval bukan Bearer token. Akses ini disimpan terenkripsi di Android Keystore.</p>
+      <summary>Akses API SIMKOPDES (digunakan bila server meminta autentikasi)</summary>
+      <p>Screenshot sebelumnya menunjukkan HTTP 403 Forbidden: server menolak request sebelum dekripsi. Bila kamu memiliki Bearer token API SIMKOPDES resmi dari akun pendamping yang berwenang, simpan di sini. Token akan dipakai pada request ke api.simkopdes.go.id sejak validasi awal, statistik, dan data aset; token tidak dikirim ke simkopdes.go.id maupun file JavaScript. Password AgriConnect dan passcode halaman Verval bukan Bearer token. Penyimpanan menggunakan Android Keystore.</p>
       <div class="field-block"><label for="vervalFacilitatorId">ID pendamping SIMKOPDES</label><input id="vervalFacilitatorId" inputmode="numeric" autocomplete="off" placeholder="ID regional facilitator" /></div>
       <div class="field-block"><label for="vervalFacilitatorToken">Bearer token API SIMKOPDES</label><input id="vervalFacilitatorToken" type="password" autocomplete="off" placeholder="Tempel token API pendamping" /></div>
       <div class="verval-access-actions"><button class="outline-btn" id="saveVervalFacilitatorAccess" type="button">Simpan akses terenkripsi</button><button class="text-btn danger-text" id="clearVervalFacilitatorAccess" type="button">Hapus akses</button></div>
-      <small id="vervalFacilitatorAccessStatus" role="status">Akses khusus pendamping belum disiapkan. Pencarian publik tetap tersedia.</small>
+      <small id="vervalFacilitatorAccessStatus" role="status">Belum ada Bearer token tersimpan. Bila endpoint publik mengembalikan 403, akses API resmi diperlukan.</small>
     </details>
     <p id="vervalRegionLoadStatus" class="verval-region-load-status" role="status">Pilih provinsi, kemudian pilih kabupaten/kota.</p>
     <div class="modal-actions"><button class="primary-btn full" id="confirmVervalCheck" type="button" disabled>Mulai Cek Data</button></div>
