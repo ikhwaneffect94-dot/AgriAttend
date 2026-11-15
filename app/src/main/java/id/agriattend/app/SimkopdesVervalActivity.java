@@ -443,7 +443,7 @@ public final class SimkopdesVervalActivity extends Activity {
                     priorityType:nonPriority?'Non Prioritas':(batchMatch?'Prioritas':''),
                     category:category||categoryLabel||'',
                     resultStatus:at(statusIndex)||at(assetStatusIndex),
-                    assetCount:Number.isFinite(parsedCount)&&parsedCount>0?parsedCount:null,
+                    assetCount:Number.isFinite(parsedCount)&&parsedCount>=0?parsedCount:null,
                     latitude:Number.isFinite(lat)?lat:null,
                     longitude:Number.isFinite(lng)?lng:null,
                     ownership:at(ownerIndex),
