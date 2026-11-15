@@ -1,24 +1,37 @@
-# AgriAttend API Integration Requirements v1.6.9
+# AgriAttend API Integration Requirements v1.7.1
 
-## SIMKOPDES Verval full-category retrieval
+## SIMKOPDES Verval targeted retrieval
 
-AgriAttend starts the official SIMKOPDES Verval page in a hidden internal WebView. The user-facing province and regency/city selectors remain in AgriAttend. The official form handles passcode verification and produces the result table; the internal page runtime reads that result and returns normalized rows to the AgriAttend card.
+AgriAttend obtains the assigned cooperative identifier/name and location from the AgriConnect placement data already shown on the Verval card. When the card supplies province, regency/city, and cooperative assignment, no additional region picker is shown. A manual picker is available only as a fallback if any of those fields are missing.
 
-### Retrieval coverage
+The official SIMKOPDES Verval form is executed inside a transparent, non-interactive, full-viewport WebView. The visible user interface remains AgriAttend. The WebView uses the portal's own region/passcode form and reads the resulting official table.
 
-- Inspect visible tabs, buttons, links, custom tabs, and select options for Batch 1–4, Prioritas, and Non Prioritas.
-- Visit every detected category/filter one by one.
-- Collect visible table rows after each selection; do not stop when the first table becomes non-empty.
-- Follow enabled pagination controls and collect subsequent result pages, up to 50 pages per category.
-- Parse category/batch/prioritas columns alongside cooperative name, status, ownership, surveyor, coordinates, and asset count when provided.
-- Deduplicate identical rows and consolidate multiple rows of the same cooperative before matching the assignment.
-- Keep Non Prioritas distinct from Batch 1–4 in the result badge.
-- Return coverage metadata. If the live portal does not expose all required category controls, the app marks coverage as incomplete rather than claiming that every category was searched.
+### Search sequence
 
-### Matching
+1. Read province, regency/city, and cooperative assignment from AgriConnect.
+2. Load the official Verval route.
+3. Select the target province and regency/city in the official form.
+4. Submit the shared Verval passcode.
+5. Visit detected Batch 1–4, Prioritas, and Non Prioritas controls.
+6. Read each category table and follow enabled pagination up to six pages per category.
+7. Deduplicate rows, consolidate records for the same cooperative, match the AgriConnect assignment, and return the record to the AgriAttend card.
 
-Normalize the KDKMP name from AgriConnect and compare against all records collected across categories. Records are grouped by cooperative ID where available, otherwise by normalized cooperative name. A match in Non Prioritas is valid and must be displayed as Non Prioritas.
+### v1.7.1 reliability changes
 
-### Limits and validation
+- The injected JavaScript previously contained a duplicated runner wrapper; it is now emitted once.
+- The internal WebView has a full responsive viewport. It remains transparent to the user but no longer renders the page in a 1×1 viewport.
+- Result callbacks now render the card after success, not-found, ambiguity, or failure.
+- Failure clears the checking state, restores the button, and displays error text instead of leaving the card stuck.
+- A 70-second PWA watchdog resets any request that does not return a native result.
+- The native automation has a 60-second timeout.
+- CI checks the injected JavaScript extracted from the Java text block with node --check.
 
-The portal DOM may change. The hidden WebView automation reports safe metadata about tabs, dropdown options, inputs, buttons, and categories found. It does not bypass CAPTCHA, portal login, or server-side permission checks. A successful APK build proves compilation only; category completeness and result matching must be confirmed against the live portal on an Android device.
+### Accuracy boundaries
+
+The workflow searches categories and pages exposed by the current live portal DOM. Six pages per category is an intentional speed limit, not proof that a deeper result set has been exhausted. If the portal changes its form, table, tabs, or pagination markup, the request returns a diagnostic/failure state rather than silently leaving the card in checking. The app reports incomplete coverage when it cannot verify all expected categories or page traversal.
+
+The automation does not bypass CAPTCHA, login, or server-side permissions. Data fields not present in the official table remain blank and are not fabricated.
+
+## AgriConnect API
+
+Authentication, employee profile/assignment, timesheet, attendance, correction/backdate requests, shift-change requests, payroll, and request status continue to use the authenticated AgriConnect tenant API.
