@@ -621,7 +621,7 @@ function renderVervalPage(){
   const regionEl=$('#vervalPlacementRegion');if(regionEl)regionEl.textContent=regionParts.join(' · ')||'Lokasi penugasan belum terbaca dari AgriConnect';
   const found=findPlacementVervalMatch(state.vervalRecords),matched=found&&!found.ambiguous?found:null;
   const statusEl=$('#vervalPlacementStatus'),batchEl=$('#vervalPlacementBatch'),resultPanel=$('#vervalPlacementResult');
-  if(statusEl){if(matched)statusEl.textContent=matched.resultStatus||'Status pemeriksaan aset tidak terbaca';else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';else statusEl.textContent='Belum diperiksa';}
+  if(statusEl){if(matched)statusEl.textContent=matched.resultStatus||'Status pemeriksaan aset tidak terbaca';else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';else if(state.vervalMatchState==='portal_opened')statusEl.textContent='Portal resmi SIMKOPDES dibuka · menunggu hasil Verval';else statusEl.textContent='Belum diperiksa';}
   if(batchEl){batchEl.hidden=!matched||!matched.batch;batchEl.textContent=matched?.batch?`Batch ${matched.batch}`:'';}
   if(resultPanel){
     resultPanel.hidden=!matched;
@@ -640,7 +640,6 @@ function renderVervalPage(){
   }
   const updated=$('#vervalUpdatedAt');if(updated)updated.textContent=state.vervalUpdatedAt?`Diperiksa ${fmtDate(state.vervalUpdatedAt,{day:'2-digit',month:'short',year:'numeric'})} pukul ${fmtTime(state.vervalUpdatedAt)}`:'Belum ada pemeriksaan';
   const preview=$('#vervalTargetPreview');if(preview)preview.textContent=getPlacementDisplayName();
-  const select=$('#vervalProvinceSelect');if(select&&!select.dataset.initialized)populateVervalProvinces(placement.province);
   renderVervalRegionalStats();
 }
 function setVervalStatus(message,isError=false){const el=$('#vervalLiveStatus');if(el){el.textContent=message;el.classList.toggle('verval-error',!!isError);}}
@@ -690,115 +689,23 @@ window.__vervalDirectResult=function(payload){
     showToast(e.message||'Pengambilan data SIMKOPDES gagal.');
   }finally{if(btn){btn.disabled=false;btn.textContent='✓ Cek Data Verval';}}
 };
-function setVervalRegionLoadStatus(message,isError=false){const el=$('#vervalRegionLoadStatus');if(el){el.textContent=message;el.classList.toggle('verval-error',!!isError);}}
-function populateVervalProvinces(selectedProvince=''){
-  const select=$('#vervalProvinceSelect');if(!select)return '';
-  select.innerHTML='<option value="">Pilih provinsi</option>'+VERVAL_PROVINCES.map(([id,name])=>`<option value="${id}">${esc(name)}</option>`).join('');
-  const normalized=normalizeRegionName(selectedProvince);
-  const detected=VERVAL_PROVINCES.find(([,name])=>normalizeRegionName(name)===normalized);
-  select.value=detected?detected[0]:'';
-  select.dataset.initialized='1';
-  return select.value;
-}
-async function loadVervalRegencies(provinceId,preferredDistrict=''){
-  const requestToken=++vervalRegionLoadToken;
-  const select=$('#vervalDistrictSelect'),confirm=$('#confirmVervalCheck');if(!select)return;
-  select.disabled=true;if(confirm)confirm.disabled=true;
-  select.innerHTML='<option value="">Memuat kabupaten/kota…</option>';
-  setVervalRegionLoadStatus('Memuat daftar kabupaten/kota untuk provinsi yang dipilih…');
-  if(!provinceId){select.innerHTML='<option value="">Pilih provinsi terlebih dahulu</option>';return;}
-  let rows=[],fallback=false;
-  const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),12000);
+function openVervalPortal(){
+  if(!session){showAuth('Login AgriConnect diperlukan untuk membuka Pantauan Verval.');return;}
+  state.vervalMatchState='portal_opened';
+  persist();
+  setVervalStatus('Membuka portal resmi SIMKOPDES. Pilih provinsi, kabupaten/kota, masukkan passcode pada halaman portal, lalu tampilkan tabel Verval.');
   try{
-    const response=await fetch(`https://www.emsifa.com/api-wilayah-indonesia/v2/regencies/${encodeURIComponent(provinceId)}.json`,{headers:{Accept:'application/json'},cache:'force-cache',signal:controller.signal});
-    if(!response.ok)throw new Error(`HTTP ${response.status}`);
-    const json=await response.json(),list=Array.isArray(json)?json:(Array.isArray(json?.data)?json.data:[]);
-    rows=list.map(x=>({id:String(x.id||x.code||''),name:String(x.name||x.nama||'').trim()})).filter(x=>x.name);
-  }catch(_){fallback=true;}
-  finally{clearTimeout(timeout);}
-  if(requestToken!==vervalRegionLoadToken)return;
-  if(!rows.length)rows=(VERVAL_FALLBACK_REGENCIES[provinceId]||[]).map(name=>({id:'',name}));
-  const placement=getPlacementRegion();
-  const provinceName=VERVAL_PROVINCES.find(x=>x[0]===provinceId)?.[1]||'';
-  const samePlacementProvince=normalizeRegionName(placement.province)===normalizeRegionName(provinceName);
-  const suggested=placement.kabupaten;
-  if(samePlacementProvince&&suggested&&!rows.some(x=>normalizeRegionName(x.name)===normalizeRegionName(suggested))){
-    const clean=suggested.replace(/^(kabupaten|kab\.?|kota)\s*/i,'');
-    rows.unshift({id:'',name:/^kota\b/i.test(suggested)?`Kota ${clean}`:`Kabupaten ${clean}`});
-  }
-  rows.sort((a,b)=>a.name.localeCompare(b.name,'id'));
-  if(!rows.length){select.innerHTML='<option value="">Daftar kabupaten/kota tidak tersedia</option>';setVervalRegionLoadStatus('Daftar wilayah belum dapat diambil. Coba lagi ketika koneksi tersedia.',true);return;}
-  select.innerHTML='<option value="">Pilih kabupaten/kota</option>'+rows.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');
-  const districtTarget=preferredDistrict|| (samePlacementProvince?suggested:'');
-  const preferred=districtTarget?rows.find(x=>normalizeRegionName(x.name)===normalizeRegionName(districtTarget)):null;
-  select.value=preferred?preferred.name:'';
-  select.disabled=false;
-  if(confirm)confirm.disabled=!select.value;
-  const suggestionText=preferred?` Lokasi penugasan (${preferred.name}) dipilih otomatis; pastikan wilayahnya sesuai.`:(samePlacementProvince&&suggested?` Lokasi penugasan terdeteksi di ${suggested}; pilih wilayah tersebut bila sesuai.`:'');
-  setVervalRegionLoadStatus(`${rows.length} kabupaten/kota tersedia.${fallback?' Referensi daring gagal; memakai daftar cadangan yang tersedia.':''}${suggestionText}`);
-}
-function openVervalRegionDialog(){
-  if(!session){showAuth('Login AgriConnect diperlukan untuk mencocokkan lokasi penugasan.');return;}
-  const provinceSelect=$('#vervalProvinceSelect'),districtSelect=$('#vervalDistrictSelect'),dialog=$('#vervalRegionDialog');
-  vervalRegionLoadToken++;
-  const parts=getPlacementKopdesParts(),placement=getPlacementRegion();
-  const preferredProvince=state.vervalProvince||placement.province;
-  const provinceId=populateVervalProvinces(preferredProvince);
-  districtSelect.disabled=true;
-  districtSelect.innerHTML=provinceId?'<option value="">Memuat kabupaten/kota penugasan…</option>':'<option value="">Pilih provinsi terlebih dahulu</option>';
-  $('#confirmVervalCheck').disabled=true;
-  const preview=$('#vervalTargetPreview');if(preview)preview.textContent=getPlacementDisplayName();
-  refreshVervalFacilitatorAccessInfo();
-  const hint=parts.length>=3?`Target nama: ${parts[parts.length-1]}. Wilayah penugasan terbaca: ${placement.kabupaten||'Kabupaten belum terdeteksi'}${placement.province?' · '+placement.province:''}.`:'';
-  setVervalRegionLoadStatus(hint+(provinceId?' Memuat kabupaten/kota penugasan secara otomatis…':' Pilih provinsi terlebih dahulu, kemudian pilih kabupaten/kota.'));
-  if(dialog&&!dialog.open)dialog.showModal();
-  if(provinceId)loadVervalRegencies(provinceId,state.vervalAssignment||placement.kabupaten).catch(error=>setVervalRegionLoadStatus(error.message||'Gagal memuat kabupaten/kota.',true));
-}
-function refreshVervalFacilitatorAccessInfo(){
-  const status=$('#vervalFacilitatorAccessStatus');
-  if(!status)return;
-  try{
-    if(!window.AndroidBridge||typeof AndroidBridge.getSimkopdesApiAccessInfo!=='function'){
-      status.textContent='Penyimpanan akses khusus hanya tersedia di aplikasi Android.';return;
+    if(window.AndroidBridge&&typeof AndroidBridge.openSimkopdesVervalPortal==='function'){
+      AndroidBridge.openSimkopdesVervalPortal();
+      return;
     }
-    const info=JSON.parse(window.AndroidBridge.getSimkopdesApiAccessInfo()||'{}');
-    if(info.saved){const id=$('#vervalFacilitatorId');if(id)id.value=info.facilitatorId||'';status.textContent=`Akses API pendamping tersimpan terenkripsi untuk ID ${info.facilitatorId}. Token tidak ditampilkan.`;}
-    else status.textContent='Akses khusus pendamping belum disiapkan. Endpoint publik dan statistik wilayah tetap dapat digunakan.';
-  }catch(_){status.textContent='Status penyimpanan akses tidak dapat dibaca.';}
+    window.open('https://simkopdes.go.id/pers/asset/verval?batch_verification=1%2C2%2C3%2C4','_blank','noopener');
+  }catch(error){
+    setVervalStatus('Portal resmi SIMKOPDES tidak dapat dibuka: '+(error.message||error),true);
+    showToast('Portal Verval SIMKOPDES tidak dapat dibuka.');
+  }
 }
-function saveVervalFacilitatorAccess(){
-  const id=$('#vervalFacilitatorId')?.value?.trim()||'',token=$('#vervalFacilitatorToken')?.value?.trim()||'';
-  const status=$('#vervalFacilitatorAccessStatus');
-  if(!/^\d{1,12}$/.test(id)||token.length<20){if(status)status.textContent='Isi ID pendamping numerik dan Bearer token API SIMKOPDES yang sah.';return;}
-  try{
-    const saved=window.AndroidBridge?.saveSimkopdesApiAccess?.(id,token);
-    const info=JSON.parse(window.AndroidBridge.getSimkopdesApiAccessInfo()||'{}');
-    if(!saved||!info.saved||String(info.facilitatorId)!==id)throw new Error('Penyimpanan tidak terverifikasi.');
-    const input=$('#vervalFacilitatorToken');if(input)input.value='';
-    if(status)status.textContent=`Akses API pendamping ID ${id} tersimpan terenkripsi. Token tidak ditampilkan.`;
-    showToast('Akses API khusus pendamping tersimpan aman.');
-  }catch(e){if(status)status.textContent=e.message||'Gagal menyimpan akses khusus pendamping.';}
-}
-function clearVervalFacilitatorAccess(){
-  const status=$('#vervalFacilitatorAccessStatus');
-  try{window.AndroidBridge?.clearSimkopdesApiAccess?.();const id=$('#vervalFacilitatorId'),token=$('#vervalFacilitatorToken');if(id)id.value='';if(token)token.value='';if(status)status.textContent='Akses khusus pendamping dihapus dari perangkat.';showToast('Akses API khusus pendamping dihapus.');}
-  catch(_){if(status)status.textContent='Akses tidak berhasil dihapus.';}
-}
-function confirmVervalRegionSelection(){
-  const provinceSelect=$('#vervalProvinceSelect'),districtSelect=$('#vervalDistrictSelect');
-  const provinceName=provinceSelect?.selectedOptions?.[0]?.textContent?.trim()||'',districtName=districtSelect?.value?.trim()||'';
-  if(!provinceName||!districtName){setVervalRegionLoadStatus('Pilih provinsi dan kabupaten/kota terlebih dahulu.',true);return;}
-  if(!session){setVervalRegionLoadStatus('Login AgriConnect terlebih dahulu.',true);return;}
-  if(!window.AndroidBridge||typeof AndroidBridge.fetchVervalDirect!=='function'){setVervalRegionLoadStatus('Koneksi API langsung tersedia pada aplikasi Android AgriAttend.',true);return;}
-  const assignment=getPlacementKopdes();
-  if(!assignment){setVervalRegionLoadStatus('Nama Kopdes penugasan tidak ditemukan pada profil AgriConnect.',true);return;}
-  state.vervalAssignment=districtName;state.vervalProvince=provinceName;state.vervalMatchState='checking';persist();const dialog=$('#vervalRegionDialog');if(dialog?.open)dialog.close();
-  const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=true;btn.textContent='Mengambil data…';}
-  setVervalStatus(`Mengambil data langsung: ${provinceName} → ${districtName}. Mencocokkan ${getPlacementDisplayName()}…`);
-  try{AndroidBridge.fetchVervalDirect(provinceName,districtName,assignment);}catch(error){window.__vervalDirectResult({success:false,message:error.message||'Gagal mengambil data langsung dari SIMKOPDES.'});}
-}
-function refreshVervalData(){openVervalRegionDialog();}
+function refreshVervalData(){openVervalPortal();}
 
 function formatMoney(value){if(value===null||value===undefined||value==='')return '—';const n=Number(value);return Number.isFinite(n)?new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(n):String(value);}
 function renderPayslipPage(){
@@ -1070,12 +977,6 @@ function bindEvents(){
   $$('[data-request-category]').forEach(b=>b.addEventListener('click',()=>{requestCategoryFilter=b.dataset.requestCategory;$$('[data-request-category]').forEach(x=>x.classList.toggle('active',x===b));renderCorrectionStatusList();}));
   $('#refreshProfile').addEventListener('click',refreshProfileData);
   $('#openVervalCheckDialog').addEventListener('click',refreshVervalData);
-  $('#closeVervalRegionDialog').addEventListener('click',()=>$('#vervalRegionDialog').close());
-  $('#vervalProvinceSelect').addEventListener('change',e=>{loadVervalRegencies(e.target.value).catch(err=>setVervalRegionLoadStatus(err.message||'Gagal memuat kabupaten/kota.',true));});
-  $('#vervalDistrictSelect').addEventListener('change',e=>{$('#confirmVervalCheck').disabled=!e.target.value;});
-  $('#confirmVervalCheck').addEventListener('click',confirmVervalRegionSelection);
-  $('#saveVervalFacilitatorAccess').addEventListener('click',saveVervalFacilitatorAccess);
-  $('#clearVervalFacilitatorAccess').addEventListener('click',clearVervalFacilitatorAccess);
   $('#loginContinue').addEventListener('click',preflightLogin);$('#authForm').addEventListener('submit',submitLogin);
   $('#backToUsername').addEventListener('click',()=>{$('#credentialStep').hidden=true;$('#authActions').hidden=true;$('#loginContinue').hidden=false;$('#loginPassword').value='';preflightNeedsOtp=false;loginMessage('');});
   $('#logoutBtn').addEventListener('click',logout);
