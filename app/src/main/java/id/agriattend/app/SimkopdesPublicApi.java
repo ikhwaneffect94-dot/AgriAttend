@@ -80,20 +80,27 @@ final class SimkopdesPublicApi {
         if (workingCipher != null) parameters.add(workingCipher);
         else parameters.addAll(candidates);
 
-        StringBuilder endpointNotes = new StringBuilder();
-        JSONObject verificationStats = optionalDecryptedObject("/statistics/asset-verification-validation", parameters, apiBearer, endpointNotes);
-        JSONObject verificationProvince = findVerificationProvince(verificationStats, province);
-        JSONObject phase2Root = optionalDecryptedObject("/statistics/national/phase-2", parameters, apiBearer, endpointNotes);
-        JSONArray phase2Rows = findPhase2ProvinceRows(phase2Root, province);
-
+        // Primary Verval data comes from the public land-asset tree. Fetch it
+        // immediately after cipher validation; optional statistics must never
+        // prevent an individual cooperative result from being rendered.
         JSONArray records = new JSONArray();
         String assetApiNote = "";
+        StringBuilder endpointNotes = new StringBuilder();
         try {
             JSONObject tree = getDecrypted("/cooperative-assets/get-all", parameters, apiBearer);
             records = extractAssets(tree, province, district, subdistrictHint, target);
         } catch (Exception assetError) {
             assetApiNote = " Data aset individual tidak berhasil ditarik: " + safeMessage(assetError) + ".";
         }
+
+        // Optional province statistics are fetched only after the primary asset
+        // request. The phase-2 route is deliberately omitted: the current server
+        // responds HTTP 403 for it, and it is not part of the public extractor's
+        // documented bulk-data flow.
+        JSONObject verificationStats = optionalDecryptedObject(
+                "/statistics/asset-verification-validation", parameters, apiBearer, endpointNotes);
+        JSONObject verificationProvince = findVerificationProvince(verificationStats, province);
+        JSONArray phase2Rows = new JSONArray();
 
         JSONArray facilitatorRecords = new JSONArray();
         String facilitatorNote = "";
@@ -127,7 +134,7 @@ final class SimkopdesPublicApi {
         result.put("success", records.length() > 0 || hasRegionalStats);
         result.put("records", records);
         result.put("updatedAt", System.currentTimeMillis());
-        result.put("source", "SIMKOPDES API langsung: cooperative-assets/get-all; statistics/asset-verification-validation; statistics/national/phase-2");
+        result.put("source", "SIMKOPDES API langsung: cooperative-assets/get-all; statistik provinsi bersifat opsional");
         result.put("assetApiNote", assetApiNote);
         result.put("endpointNotes", endpointNotes.toString());
         result.put("verificationStatsAvailable", verificationProvince != null);
@@ -185,9 +192,7 @@ final class SimkopdesPublicApi {
     private CipherParameters discoverWorkingCipher(List<CipherParameters> candidates, String bearerToken) throws Exception {
         String[] endpoints = new String[]{
                 "/cooperatives/get-all-nested",
-                "/cooperative-assets/get-all",
-                "/statistics/asset-verification-validation",
-                "/statistics/national/phase-2"
+                "/cooperative-assets/get-all"
         };
         String lastError = "Tidak ada respons API yang dapat dipakai untuk memvalidasi parameter dekripsi.";
         for (String endpoint : endpoints) {
@@ -732,7 +737,7 @@ final class SimkopdesPublicApi {
         connection.setInstanceFollowRedirects(true);
         boolean apiHost = "api.simkopdes.go.id".equals(host);
         connection.setRequestProperty("Accept", apiHost ? "application/json" : "text/html,application/javascript,*/*");
-        connection.setRequestProperty("User-Agent", "AgriAttend-Android/1.6.4 (SIMKOPDES read-only integration)");
+        connection.setRequestProperty("User-Agent", "AgriAttend-Android/1.6.5 (SIMKOPDES read-only integration)");
         if (apiHost) {
             connection.setRequestProperty("Origin", SITE);
             connection.setRequestProperty("Referer", SITE + "/pers/dashboard");
