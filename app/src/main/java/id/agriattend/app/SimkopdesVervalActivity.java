@@ -284,7 +284,6 @@ public final class SimkopdesVervalActivity extends Activity {
             passInput.dispatchEvent(new Event('input',{bubbles:true}));
             passInput.dispatchEvent(new Event('change',{bubbles:true}));
             passInput.dispatchEvent(new Event('blur',{bubbles:true}));
-            bridge.onPasscodeSubmitted();
             await sleep(250);
 
             const buttons=Array.from(document.querySelectorAll('button,[role=button],input[type=submit]')).filter(visible);
@@ -309,6 +308,7 @@ public final class SimkopdesVervalActivity extends Activity {
               }
             }
 
+            bridge.onPasscodeSubmitted();
             report('Passcode dikirim. Menunggu tabel hasil Verval…');
             for(let attempt=0;attempt<40;attempt++){
               await sleep(500);
@@ -433,7 +433,6 @@ public final class SimkopdesVervalActivity extends Activity {
             result.put("requestedProvince", province);
             result.put("requestedDistrict", district);
             result.put("assignment", assignment);
-            result.put("passcodeSubmitted", true);
             result.put("passcodeSubmitted", passcodeSubmitted);
             Intent data = new Intent();
             data.putExtra("verval_result_json", result.toString());
