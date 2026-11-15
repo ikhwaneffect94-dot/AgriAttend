@@ -383,15 +383,56 @@ async function apiJsonWithRefresh(method,url,body=null,bodyMode='json'){
   }
 }
 async function restoreSession(){
-  if(!window.AndroidBridge||!AndroidBridge.getSecureSession){showAuth('Jalankan AgriAttend versi Android untuk login dan mengirim absensi.');return;}
+  if(!window.AndroidBridge||!AndroidBridge.getSecureSession){
+    showAuth('Jalankan AgriAttend versi Android untuk menggunakan akun AgriConnect.');
+    return false;
+  }
+  let saved='';
+  try{saved=AndroidBridge.getSecureSession()||'';}
+  catch(error){showAuth('Penyimpanan sesi perangkat tidak dapat dibaca: '+error.message);return false;}
+  if(!saved){session=null;profileDetail=null;personalDetail=null;employmentDetail=null;showAuth();return false;}
   try{
-    const saved=AndroidBridge.getSecureSession();if(!saved){showAuth();return;}
-    session=JSON.parse(saved);if(!session?.accessToken||!session?.urlApi){session=null;showAuth();return;}
-    session.urlApi=validateTenantApiUrl(session.urlApi);if(AndroidBridge.setTenantApiHost&&!AndroidBridge.setTenantApiHost(new URL(session.urlApi).hostname))throw new Error('Host API tenant tidak valid.');
-    const exp=session.expirationDate?new Date(session.expirationDate).getTime():0;
-    if(exp&&exp<Date.now()+60000)await refreshSession();else{await loadOfficialProfile();await loadOfficialAttendanceSettings();saveSession();}
-    hideAuth();if($('#connectionStatus'))$('#connectionStatus').textContent='Terhubung';renderAll();
-  }catch(e){session=null;AndroidBridge.clearSecureSession();showAuth('Sesi tidak dapat dipulihkan. Login kembali: '+e.message);}
+    const restored=JSON.parse(saved);
+    if(!restored?.accessToken||!restored?.urlApi)throw new Error('Sesi tersimpan tidak memuat token dan alamat tenant.');
+    session=restored;
+    session.urlApi=validateTenantApiUrl(session.urlApi);
+    if(AndroidBridge.setTenantApiHost&&!AndroidBridge.setTenantApiHost(new URL(session.urlApi).hostname))
+      throw new Error('Host API tenant tidak valid.');
+    profileDetail=session.profileDetail||null;
+    personalDetail=session.personalDetail||null;
+    employmentDetail=session.employmentDetail||null;
+  }catch(error){
+    session=null;
+    showAuth('Sesi perangkat tidak dapat dibaca. Login AgriConnect diperlukan: '+error.message);
+    return false;
+  }
+
+  let profileError='';
+  const exp=session.expirationDate?new Date(session.expirationDate).getTime():0;
+  try{
+    if(exp&&exp<Date.now()+60000){
+      await refreshSession(false);
+    }else{
+      try{await loadOfficialProfile();}
+      catch(error){
+        if(error?.status===401){
+          try{await refreshSession(false);}
+          catch(refreshError){profileError=refreshError.message||error.message;}
+        }else profileError=error.message||'Profil tidak dapat diperbarui saat ini.';
+      }
+    }
+  }catch(error){
+    profileError=error.message||'Sesi belum dapat diperbarui.';
+  }
+  try{await loadOfficialAttendanceSettings();}
+  catch(error){console.warn('Tenant settings refresh failed:',error);}
+  try{saveSession();}
+  catch(error){console.warn('Could not refresh encrypted session snapshot:',error);}
+  hideAuth();
+  if($('#connectionStatus'))$('#connectionStatus').textContent='Terhubung';
+  renderAll();
+  if(profileError)setVervalStatus('Akun AgriConnect tetap tersimpan. Pembaruan profil tertunda: '+profileError,true);
+  return true;
 }
 function logout(){
   if(!confirm('Keluar dari sesi AgriConnect pada aplikasi ini?'))return;
@@ -496,21 +537,28 @@ function normalizeRegionText(value){return String(value||'').normalize('NFD').re
 function getPlacementKopdes(){
   const sources=[session?.employmentDetail,employmentDetail,session?.profileDetail,profileDetail,session?.profile].filter(Boolean);
   const seen=new Set(),candidates=[];
+  const placeholder=/^(?:memuat|loading|data penugasan|memuat data penugasan|belum tersedia|belum dimuat|tidak tersedia|penugasan)$/i;
   function visit(obj,depth=0){
-    if(!obj||typeof obj!=='object'||depth>6||seen.has(obj))return;seen.add(obj);
+    if(!obj||typeof obj!=='object'||depth>7||seen.has(obj))return;
+    seen.add(obj);
     for(const [key,value] of Object.entries(obj)){
       if(typeof value==='string'&&value.trim()){
-        const k=key.toLowerCase().replace(/[_\-\s]/g,''),v=value.trim();if(v.length<5||v.length>180)continue;
-        let score=0;
-        if(/kdkmp|kdmp|kopdes|koperasi desa|merah putih/i.test(v))score+=100;
-        if(v.includes('_'))score+=30;
-        if(/locationname|worklocation|assignment|placement|kopdes|koperasi|gerai/i.test(k))score+=35;
-        if(/address|alamat|company|organization|manager|description/i.test(k))score-=15;
-        if(score>0)candidates.push({value:v,score});
+        const k=key.toLowerCase().replace(/[_\-\s]/g,''),v=value.trim();
+        if(v.length<5||v.length>180||placeholder.test(v))continue;
+        const hasKopdesMarker=/kdkmp|kdmp|kopdes|koperasi\s+desa|merah\s+putih/i.test(v);
+        const semanticKey=/(kdkmp|kdmp|kopdes|koperasi|assignment|placement)/i.test(k);
+        if(!hasKopdesMarker&&!semanticKey)continue;
+        let score=hasKopdesMarker?120:20;
+        if(/kdkmp|kdmp|kopdes|koperasi/i.test(k))score+=50;
+        if(/assignment|placement/i.test(k))score+=35;
+        if(v.includes('_'))score+=25;
+        if(/address|alamat|company|organization|manager|description|status|message/i.test(k))score-=80;
+        candidates.push({value:v,score,key:k,hasKopdesMarker});
       }else if(value&&typeof value==='object')visit(value,depth+1);
     }
   }
-  sources.forEach(x=>visit(x));candidates.sort((a,b)=>b.score-a.score||a.value.length-b.value.length);
+  sources.forEach(source=>visit(source));
+  candidates.sort((a,b)=>b.score-a.score||Number(b.hasKopdesMarker)-Number(a.hasKopdesMarker)||a.value.length-b.value.length);
   return candidates[0]?.value||'';
 }
 function getPlacementKopdesParts(){
@@ -544,8 +592,9 @@ function getPlacementKopdesSearchName(){
 }
 function getPlacementDisplayName(){
   const raw=getPlacementKopdes(),searchName=getPlacementKopdesSearchName();
-  if(/^(?:kdkmp|kdmp)[\s_|-]/i.test(raw))return `KDKMP ${searchName}`;
-  return formatPlacementName(raw)||'Nama Kopdes belum tersedia';
+  if(!raw)return 'Nama Kopdes belum tersedia';
+  if(/^(?:kdkmp|kdmp)[\s_|-]/i.test(raw))return searchName?'KDKMP '+searchName:'Nama Kopdes belum terbaca';
+  return formatPlacementName(raw);
 }
 function normalizeKopdesName(value){
   return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/_/g,' ')
@@ -564,7 +613,7 @@ function getPlacementRegion(){
     seen.add(obj);
     for(const [key,value] of Object.entries(obj)){
       if(typeof value==='string'&&value.trim()){
-        const k=key.toLowerCase(),v=value.trim();
+        const k=key.toLowerCase().replace(/[_\-\s]/g,''),v=value.trim();
         if(regencyKeys.includes(k))values.push({kind:'regency',value:v});
         else if(cityKeys.includes(k))values.push({kind:'city',value:v});
         else if(subdistrictKeys.includes(k))values.push({kind:'subdistrict',value:v});
@@ -581,7 +630,7 @@ function getPlacementRegion(){
     const v=clean(value);
     if(!v)return '';
     if(/^(kabupaten|kab\.?|kota|kecamatan|kec\.?)\b/i.test(v))return v;
-    return `${label} ${v}`;
+    return label+' '+v;
   };
   let kabupaten='',kecamatan='',province='';
   const regency=values.find(x=>x.kind==='regency'),city=values.find(x=>x.kind==='city');
@@ -605,8 +654,6 @@ function getPlacementRegion(){
       if(m)province=clean(m[1]);
     }
   }
-  // Structured identifiers: KDKMP_<regency>_<subdistrict>_<village>.
-  // Do not guess multi-word kecamatan names from flattened underscore fragments.
   if(code&&parts.length>=3){
     if(!kabupaten)kabupaten=withPrefix(parts[0],'Kabupaten');
     if(!kecamatan&&parts.length>=4)kecamatan=withPrefix(parts.slice(1,-2).join(' '),'Kecamatan');
