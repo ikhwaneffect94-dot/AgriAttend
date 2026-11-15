@@ -79,11 +79,16 @@ jobs:
           import textwrap, xml.etree.ElementTree as ET
           ET.parse('app/src/main/AndroidManifest.xml')
           gradle = open('app/build.gradle', encoding='utf-8').read()
-          assert "versionCode 32" in gradle and "versionName '1.7.3'" in gradle
+          assert "versionCode 33" in gradle and "versionName '1.7.4'" in gradle
           native = open('app/src/main/java/id/agriattend/app/SimkopdesVervalActivity.java', encoding='utf-8').read()
           assert native.count("run().catch(error=>") == 1, "Verval automation runner must be declared exactly once"
           assert "webView.setVisibility(View.VISIBLE)" in native
           assert "LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f" in native
+          assert 'https://simkopdes.go.id/pers/asset/verval";' in native
+          assert "batch_verification=1%2C2%2C3%2C4" not in native
+          assert "const regency = %s;" in native and "const subdistrict = %s;" in native
+          assert "const assignmentSearchName = %s;" in native
+          assert "chooseRegion(subdistrict,'subdistrict',[p.select,d.select])" in native
           assert "function applyAssignmentSearch()" in native
           assert "assignmentSearchName" in native
           assert "const maxPagesPerCategory=12" in native
@@ -96,12 +101,27 @@ jobs:
           app = open('app/src/main/assets/app.js', encoding='utf-8').read()
           assert "function armVervalWatchdog()" in app
           assert "function getPlacementKopdesSearchName()" in app
-          assert "if(/^(?:kdkmp|kdmp)[_|]/i.test(raw)&&parts.length>=3)" in app
+          assert "return tokens.slice(-2).join(' ')" in app
+          assert "parts.slice(1,-2).join(' ')" in app
+          assert "const subdistrictKeys=" in app
+          assert "placement.kecamatan" in app
+          assert "startSimkopdesVervalAutomation(provinceName,regencyName,subdistrictName,assignment,searchName)" in app
           assert "function getVervalCategoryLabel(record)" in app
           assert "function levenshteinDistance(a,b)" in app
           assert "function fuzzyKopdesNameScore(candidate,name)" in app
           assert "Masuk: ${category}" in app
+          assert "},100000);" in app
           assert "state.vervalRecords=[matched]" in app and "renderVervalPage();" in app
+          html = open('app/src/main/assets/index.html', encoding='utf-8').read()
+          assert "Lokasi kerja tersimpan" not in html and "statLocations" not in html
+          assert 'id="vervalSubdistrictSelect"' in html
+          assert "© ikhwan_effect" in html
+          css = open('app/src/main/assets/styles.css', encoding='utf-8').read()
+          assert ".app-credit" in css
+          assert "repeat(2,minmax(0,1fr))" in css
+          import re
+          ui_text = html + app
+          assert not re.search(r"\\bAI\\b|artificial intelligence|kecerdasan buatan|berbasis AI|asisten AI", ui_text, re.I)
           assert "state.vervalMatchState='error'" in app
           print('Manifest, version, generated Verval script, viewport, callback rendering, and watchdog checks OK')
           PY
@@ -118,7 +138,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgriAttend-debug-APK-v1.7.3
+          name: AgriAttend-debug-APK-v1.7.4
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
