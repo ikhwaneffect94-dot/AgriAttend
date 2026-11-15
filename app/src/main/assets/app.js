@@ -998,8 +998,16 @@ async function loadVervalSubdistricts(regencyId,preferredSubdistrict=''){
   if(confirm)confirm.disabled=!select.value;
   setVervalRegionLoadStatus(`${rows.length} kecamatan tersedia.${fallback?' Pilihan kecamatan dari data penugasan dipakai bila tersedia.':''}${preferred?' Kecamatan penugasan dipilih otomatis.':''}`);
 }
-function openVervalRegionDialog(){
-  if(!session){showAuth('Login AgriConnect diperlukan untuk membuka Pantauan Verval.');return;}
+async function ensureSessionAvailable(){
+  if(session?.accessToken&&session?.urlApi)return true;
+  const restored=await restoreSession();
+  return !!(restored&&session?.accessToken&&session?.urlApi);
+}
+async function openVervalRegionDialog(){
+  if(!await ensureSessionAvailable()){
+    if(!session)showAuth('Sesi AgriConnect belum tersedia pada perangkat ini. Silakan masuk terlebih dahulu.');
+    return;
+  }
   const placement=getPlacementRegion();
   const province=String(placement.province||'').trim(),regency=String(placement.kabupaten||'').trim();
   const subdistrict=String(placement.kecamatan||'').trim(),assignment=getPlacementKopdes();
@@ -1014,7 +1022,12 @@ function openVervalRegionDialog(){
   subdistrictSelect.disabled=true;subdistrictSelect.innerHTML='<option value="">Pilih kabupaten/kota terlebih dahulu</option>';
   $('#confirmVervalCheck').disabled=true;
   const preview=$('#vervalTargetPreview');if(preview)preview.textContent=searchName||getPlacementDisplayName();
-  setVervalRegionLoadStatus('Wilayah belum lengkap pada profil AgriConnect. Pilih kabupaten/kota dan kecamatan untuk melanjutkan.');
+  const missing=[];
+  if(!province)missing.push('provinsi');
+  if(!regency)missing.push('kabupaten/kota');
+  if(!subdistrict)missing.push('kecamatan');
+  if(!assignment||!searchName)missing.push('nama koperasi penugasan');
+  setVervalRegionLoadStatus('Data '+missing.join(', ')+' belum lengkap pada profil tersimpan. Pilih wilayah yang kurang untuk melanjutkan.');
   if(dialog&&!dialog.open)dialog.showModal();
   if(provinceId)loadVervalRegencies(provinceId,regency||state.vervalAssignment)
     .catch(error=>setVervalRegionLoadStatus(error.message||'Gagal memuat kabupaten/kota.',true));
@@ -1049,21 +1062,22 @@ function startPlacementVerval(provinceName,regencyName,subdistrictName,assignmen
   try{AndroidBridge.startSimkopdesVervalAutomation(provinceName,regencyName,subdistrictName,assignment,searchName);}
   catch(error){window.__vervalDirectResult({success:false,message:error.message||'Mesin Verval internal gagal dijalankan.',records:[]});}
 }
-function confirmVervalRegionSelection(){
+async function confirmVervalRegionSelection(){
+  if(!await ensureSessionAvailable()){
+    setVervalRegionLoadStatus('Sesi AgriConnect belum tersedia. Muat ulang sesi sebelum mengambil data.',true);return;
+  }
   const provinceSelect=$('#vervalProvinceSelect'),regencySelect=$('#vervalDistrictSelect'),subdistrictSelect=$('#vervalSubdistrictSelect');
   const provinceName=provinceSelect?.selectedOptions?.[0]?.textContent?.trim()||'';
   const regencyName=regencySelect?.value?.trim()||'',subdistrictName=subdistrictSelect?.value?.trim()||'';
   if(!provinceName||!regencyName||!subdistrictName){setVervalRegionLoadStatus('Pilih provinsi, kabupaten/kota, dan kecamatan terlebih dahulu.',true);return;}
-  if(!session){setVervalRegionLoadStatus('Login AgriConnect terlebih dahulu.',true);return;}
   if(!window.AndroidBridge||typeof AndroidBridge.startSimkopdesVervalAutomation!=='function'){
     setVervalRegionLoadStatus('Mesin pengambil data Verval internal tidak tersedia pada versi ini.',true);return;
   }
   const assignment=getPlacementKopdes(),searchName=getPlacementKopdesSearchName();
-  if(!assignment||!searchName){setVervalRegionLoadStatus('Nama koperasi penugasan tidak ditemukan pada profil AgriConnect.',true);return;}
+  if(!assignment||!searchName){setVervalRegionLoadStatus('Nama koperasi penugasan belum terbaca dari profil AgriConnect. Perbarui profil lalu coba lagi.',true);return;}
   startPlacementVerval(provinceName,regencyName,subdistrictName,assignment,searchName);
 }
-function refreshVervalData(){openVervalRegionDialog();}
-
+async function refreshVervalData(){return openVervalRegionDialog();}
 function formatMoney(value){if(value===null||value===undefined||value==='')return '—';const n=Number(value);return Number.isFinite(n)?new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(n):String(value);}
 function renderPayslipPage(){
   const panel=$('#payslipPinPanel');if(panel)panel.hidden=payslipUnlocked;
