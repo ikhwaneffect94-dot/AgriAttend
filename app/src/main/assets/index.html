@@ -70,7 +70,6 @@
         <div class="notice-banner"><span class="notice-icon">i</span><div><b>Terhubung ke sesi AgriConnect</b><p>Permintaan absensi dikirim ke API tenant setelah login. GPS aktual dan validasi radius kantor tetap diperiksa.</p></div><button class="notice-close" id="dismissNotice" aria-label="Tutup pemberitahuan">×</button></div>
         <div class="stats-grid">
           <article class="stat-card"><div class="stat-top"><span class="stat-icon green">↗</span><span class="stat-caption">HARI INI</span></div><strong id="statToday">0</strong><span class="stat-foot">Permintaan terkirim hari ini</span></article>
-          <article class="stat-card"><div class="stat-top"><span class="stat-icon blue">⌖</span><span class="stat-caption">LOKASI</span></div><strong id="statLocations">0</strong><span class="stat-foot">Lokasi kerja tersimpan</span></article>
           <article class="stat-card"><div class="stat-top"><span class="stat-icon amber">▤</span><span class="stat-caption">KOREKSI</span></div><strong id="statCorrections">0</strong><span class="stat-foot">Draf pengajuan koreksi</span></article>
         </div>
         <div class="section-heading"><div><h2>Aksi cepat</h2><p>Pilih aktivitas yang ingin dilakukan.</p></div><span class="muted-label">QUICK ACTIONS</span></div>
@@ -226,7 +225,7 @@
         <div class="panel add-location-panel" id="locationEditor" hidden><div class="panel-head"><div><h3 id="locationEditorTitle">Tambah lokasi kerja</h3><p>Masukkan koordinat titik kerja resmi.</p></div><button class="close-editor" id="closeLocationEditor">×</button></div><form id="locationForm"><input type="hidden" id="locationId" /><div class="form-grid"><div class="field-block"><label for="locationName">Nama lokasi <em>*</em></label><input id="locationName" required maxlength="60" placeholder="Contoh: Kantor Cabang Banjarmasin" /></div><div class="field-block"><label for="locationAddress">Alamat / keterangan</label><input id="locationAddress" maxlength="120" placeholder="Alamat lokasi kerja" /></div><div class="field-block"><label for="locationLat">Latitude <em>*</em></label><input id="locationLat" type="number" step="any" min="-90" max="90" required placeholder="-3.3186" /></div><div class="field-block"><label for="locationLng">Longitude <em>*</em></label><input id="locationLng" type="number" step="any" min="-180" max="180" required placeholder="114.5944" /></div></div><div class="form-actions"><button class="primary-btn" type="submit">Simpan lokasi</button><button class="ghost-btn" type="button" id="cancelLocation">Batal</button></div></form></div>
       </section>
 
-      <footer class="app-footer"><span>AgriAttend · Aplikasi pendamping absensi</span><span>Login, profil, timesheet, dan status pengajuan melalui API tenant AgriConnect</span></footer>
+      <footer class="app-footer"><span>AgriAttend · Aplikasi pendamping absensi</span><span>Login, profil, timesheet, dan status pengajuan melalui API tenant AgriConnect</span><small class="app-credit">© ikhwan_effect</small></footer>
     </main>
   </div>
 
@@ -236,6 +235,7 @@
     <div class="modal-head"><div><h3>Cek Data Verval</h3><p>Pilih wilayah yang datanya ingin ditarik dari SIMKOPDES.</p></div><button class="close-editor" id="closeVervalRegionDialog" type="button" aria-label="Tutup">×</button></div>
     <div class="field-block"><label for="vervalProvinceSelect">Provinsi</label><select id="vervalProvinceSelect"><option value="">Pilih provinsi</option></select></div>
     <div class="field-block"><label for="vervalDistrictSelect">Kabupaten / Kota</label><select id="vervalDistrictSelect" disabled><option value="">Pilih provinsi terlebih dahulu</option></select></div>
+    <div class="field-block"><label for="vervalSubdistrictSelect">Kecamatan</label><select id="vervalSubdistrictSelect" disabled><option value="">Pilih kabupaten/kota terlebih dahulu</option></select></div>
     <div class="verval-match-preview"><small>KOPDES PENUGASAN YANG AKAN DICARI</small><b id="vervalTargetPreview">Mengikuti nama penugasan AgriConnect</b><p>Setelah wilayah dipilih, AgriAttend menjalankan alur passcode resmi secara otomatis dan mencari nama koperasi ini pada tabel hasil.</p></div>
     <p id="vervalRegionLoadStatus" class="verval-region-load-status" role="status">Pilih provinsi, kemudian kabupaten/kota.</p>
     <div class="modal-actions"><button class="primary-btn full" id="confirmVervalCheck" type="button" disabled>Tarik Data Verval</button></div>
