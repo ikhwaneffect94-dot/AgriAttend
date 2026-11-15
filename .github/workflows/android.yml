@@ -91,6 +91,7 @@ jobs:
           app = open('app/src/main/assets/app.js', encoding='utf-8').read()
           assert "function armVervalWatchdog()" in app
           assert "function getPlacementKopdesSearchName()" in app
+          assert "if(/^(?:kdkmp|kdmp)[_|]/i.test(raw)&&parts.length>=3)" in app
           assert "function getVervalCategoryLabel(record)" in app
           assert "Masuk: ${category}" in app
           assert "state.vervalRecords=[matched]" in app and "renderVervalPage();" in app

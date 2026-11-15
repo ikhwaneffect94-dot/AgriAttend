@@ -523,7 +523,7 @@ function getPlacementKopdesSearchName(){
   const parts=getPlacementKopdesParts();
   // Preserve the final village segment for the legacy structured ID:
   // KDKMP_<kabupaten>_<kecamatan>_<desa>.
-  if(/^(?:kdkmp|kdmp)[_|]/i.test(raw)&&parts.length>=4)
+  if(/^(?:kdkmp|kdmp)[_|]/i.test(raw)&&parts.length>=3)
     return formatPlacementName(parts[parts.length-1]);
   // For ordinary names, remove only the KDKMP/KDMP prefix and keep the
   // complete remaining name (e.g. "KDKMP Teluk Palinget" -> "Teluk Palinget").
