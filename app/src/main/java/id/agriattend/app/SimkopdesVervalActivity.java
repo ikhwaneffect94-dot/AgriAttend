@@ -150,7 +150,7 @@ public final class SimkopdesVervalActivity extends Activity {
                             // The page script reports progress/results through PortalBridge.
                         });
                     }
-                }, 1200);
+                }, 2200);
             }
 
             @Override
@@ -213,6 +213,8 @@ public final class SimkopdesVervalActivity extends Activity {
             return {
               url: location.href,
               title: document.title,
+              readyState: document.readyState,
+              dropdownCandidates: Array.from(document.querySelectorAll('select,[role=combobox],input[readonly],input[aria-haspopup],button,[aria-haspopup],[class*=select],[class*=dropdown]')).filter(visible).slice(0,35).map(el=>({tag:el.tagName,role:el.getAttribute('role'),id:el.id,name:el.name,placeholder:el.getAttribute('placeholder'),aria:el.getAttribute('aria-label'),text:String(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,100),className:String(el.className||'').slice(0,100)})),
               requestedProvince:province,
               requestedRegency:regency,
               requestedSubdistrict:subdistrict,
@@ -256,46 +258,95 @@ public final class SimkopdesVervalActivity extends Activity {
           }
           function textOf(el){return String(el.innerText||el.textContent||el.value||el.getAttribute('aria-label')||'').trim();}
           function visibleSelects(){return Array.from(document.querySelectorAll('select')).filter(visible);}
-          function tryCustomOption(target){
-            const wanted=norm(target);
-            const candidates=Array.from(document.querySelectorAll('[role=option],option,li,button,[data-value]')).filter(visible);
-            const exact=candidates.find(el=>norm(textOf(el))===wanted);
-            if(exact){exact.click();return true;}
-            if(wanted.length<5) return false;
-            const partial=candidates.filter(el=>norm(textOf(el)).includes(wanted))
-              .sort((a,b)=>norm(textOf(a)).length-norm(textOf(b)).length)[0];
-            if(partial){partial.click();return true;}
+          function regionKindPattern(kind){
+            return kind==='province'?/provinsi|province/i:
+              kind==='regency'?/kabupaten|kab\\.?|kota|regency|city/i:/kecamatan|kec\\.?|subdistrict/i;
+          }
+          function regionControlMeta(element){
+            const labelIds=String(element.getAttribute('aria-labelledby')||'').split(/\\s+/)
+              .map(id=>document.getElementById(id)?.innerText||'').join(' ');
+            const labels=element.labels?Array.from(element.labels).map(label=>label.innerText||'').join(' '):'';
+            const field=element.closest('.form-group,.form-field,.form-item,.field,.ant-form-item,.input-group,.select-wrapper,[data-field]');
+            const fieldText=String(field?.innerText||'').replace(/\\s+/g,' ').trim().slice(0,180);
+            const own=[element.id,element.name,element.type,element.placeholder,textOf(element),
+              element.getAttribute('aria-label'),element.getAttribute('data-placeholder'),
+              element.getAttribute('title'),element.getAttribute('data-testid'),
+              element.className,labelIds,labels].filter(Boolean).join(' ');
+            return {own:own,field:fieldText,all:own+' '+fieldText};
+          }
+          function isGlobalSearchControl(element,meta){
+            const searchPattern=/search|cari|pencarian|filter|keyword|koperasi|kopdes|desa|kelurahan|passcode|password|kata.?sandi|pin/i;
+            if(searchPattern.test(meta.own)) return true;
+            if(element.tagName==='INPUT'&&String(element.type||'').toLowerCase()==='password') return true;
             return false;
+          }
+          function regionControlCandidates(kind,excluded){
+            const pattern=regionKindPattern(kind);
+            const selector='select,[role=combobox],input[readonly],input[aria-haspopup],button,[role=button],[aria-haspopup],[class*="select"],[class*="dropdown"],[data-testid*="select"]';
+            const seen=new Set();
+            return Array.from(document.querySelectorAll(selector)).filter(visible).filter(element=>{
+              if(seen.has(element)||excluded.includes(element)||element.disabled) return false;
+              seen.add(element);
+              const meta=regionControlMeta(element);
+              if(isGlobalSearchControl(element,meta)) return false;
+              const explicit=pattern.test(meta.all);
+              const dropdown=element.tagName==='SELECT'||element.getAttribute('role')==='combobox'
+                ||element.hasAttribute('aria-haspopup')||/(select|dropdown|combobox)/i.test(String(element.className||''));
+              if(element.tagName==='INPUT'&&!element.readOnly&&!element.hasAttribute('aria-haspopup')&&!explicit) return false;
+              return explicit||dropdown;
+            }).map(element=>{
+              const meta=regionControlMeta(element);
+              const explicit=pattern.test(meta.all);
+              const target=kind==='province'?'Kalimantan Tengah':kind==='regency'?'Kapuas':'Pulau Petak';
+              const selectedOption=element.tagName==='SELECT'&&optionFor(element,target);
+              return {element,score:(explicit?100:0)+(element.tagName==='SELECT'?30:0)+(element.getAttribute('role')==='combobox'?20:0)+(selectedOption?50:0)};
+            }).sort((a,b)=>b.score-a.score).map(item=>item.element);
+          }
+          function optionNodeText(element){
+            return [textOf(element),element.getAttribute('aria-label'),element.getAttribute('title'),
+              element.getAttribute('data-value'),element.getAttribute('value')].filter(Boolean).join(' ').replace(/\\s+/g,' ').trim();
+          }
+          function tryCustomOption(target,exclude){
+            const wanted=norm(target);
+            if(!wanted)return false;
+            const excluded=Array.isArray(exclude)?exclude.filter(Boolean):[exclude].filter(Boolean);
+            const selector='[role=option],option,li,button,a,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"]';
+            const candidates=Array.from(document.querySelectorAll(selector)).filter(visible).filter(el=>!excluded.includes(el))
+              .map(el=>({el,text:norm(optionNodeText(el))}))
+              .filter(item=>item.text&&item.text.length<=100&&(item.text===wanted||(wanted.length>=5&&item.text.includes(wanted))));
+            candidates.sort((a,b)=>{
+              const aExact=a.text===wanted?0:1,bExact=b.text===wanted?0:1;
+              if(aExact!==bExact)return aExact-bExact;
+              const aPreferred=a.el.matches('[role=option],option,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"]')?0:1;
+              const bPreferred=b.el.matches('[role=option],option,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"]')?0:1;
+              return aPreferred-bPreferred||a.text.length-b.text.length;
+            });
+            if(!candidates.length)return false;
+            const option=candidates[0].el;
+            const clickTarget=option.closest('[role=option],option,li,button,a,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"]')||option;
+            clickTarget.click();
+            return true;
+          }
+          function dismissRegionDropdown(){
+            try{document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true}));}catch(_){}
           }
           async function chooseRegion(target,kind,exclude){
             const excluded=Array.isArray(exclude)?exclude.filter(Boolean):[exclude].filter(Boolean);
-            for(let attempt=0;attempt<32;attempt++){
-              const selects=visibleSelects();
-              const select=selects.find(s=>!excluded.includes(s) && optionFor(s,target));
-              if(select && setSelect(select,target)) return {select,method:'select'};
-              const pattern=kind==='province'?/provinsi|province/i:
-                kind==='regency'?/kabupaten|kab\\.?|kota|regency|city/i:/kecamatan|kec\\.?|subdistrict/i;
-              const controls=Array.from(document.querySelectorAll('[role=combobox],input,button,[aria-haspopup=listbox]')).filter(visible);
-              const control=controls.find(el=>{
-                if(excluded.includes(el)) return false;
-                const labelIds=String(el.getAttribute('aria-labelledby')||'').split(/\\s+/)
-                  .map(id=>document.getElementById(id)?.innerText||'').join(' ');
-                const labels=el.labels?Array.from(el.labels).map(label=>label.innerText||'').join(' '):'';
-                const ownMeta=[el.id,el.name,el.placeholder,el.getAttribute('aria-label'),
-                  el.getAttribute('data-placeholder'),el.getAttribute('title'),labelIds,labels].join(' ');
-                const isGlobalSearch=/(?:search|cari|pencarian|koperasi|kopdes|desa|kelurahan)/i.test(ownMeta);
-                if(isGlobalSearch) return false;
-                const parentText=String(el.parentElement?.innerText||'').trim();
-                const parentMeta=parentText.length<=90&&!/(?:search|cari|koperasi|kopdes|desa|kelurahan)/i.test(parentText)?parentText:'';
-                if(el.tagName==='INPUT'&&!pattern.test(ownMeta)) return false;
-                return pattern.test(ownMeta)||!!(parentMeta&&pattern.test(parentMeta));
-              });
-              if(control){
+            const wanted=norm(target);
+            if(!wanted)return null;
+            for(let attempt=0;attempt<40;attempt++){
+              const allSelects=Array.from(document.querySelectorAll('select')).filter(el=>!excluded.includes(el)&&!el.disabled);
+              const nativeSelect=allSelects.find(select=>optionFor(select,target));
+              if(nativeSelect&&setSelect(nativeSelect,target))return {select:nativeSelect,method:'select'};
+              const controls=regionControlCandidates(kind,excluded);
+              for(const control of controls){
                 control.click();
-                await sleep(250);
-                if(tryCustomOption(target)) return {select:control,method:'custom'};
+                await sleep(300);
+                if(tryCustomOption(target,[control]))return {select:control,method:'custom'};
+                dismissRegionDropdown();
+                await sleep(120);
               }
-              await sleep(350);
+              await sleep(400);
             }
             return null;
           }
