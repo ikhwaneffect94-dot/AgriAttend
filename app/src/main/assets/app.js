@@ -621,7 +621,7 @@ function renderVervalPage(){
   const regionEl=$('#vervalPlacementRegion');if(regionEl)regionEl.textContent=regionParts.join(' · ')||'Lokasi penugasan belum terbaca dari AgriConnect';
   const found=findPlacementVervalMatch(state.vervalRecords),matched=found&&!found.ambiguous?found:null;
   const statusEl=$('#vervalPlacementStatus'),batchEl=$('#vervalPlacementBatch'),resultPanel=$('#vervalPlacementResult');
-  if(statusEl){if(matched)statusEl.textContent=matched.resultStatus||'Status pemeriksaan aset tidak terbaca';else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';else if(state.vervalMatchState==='checking')statusEl.textContent='Sedang menarik data resmi SIMKOPDES…';else statusEl.textContent='Belum diperiksa';}
+  if(statusEl){if(matched)statusEl.textContent=matched.resultStatus||'Status pemeriksaan aset tidak terbaca';else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';else if(state.vervalMatchState==='checking')statusEl.textContent='Sedang menarik data resmi SIMKOPDES…';else if(state.vervalMatchState==='error')statusEl.textContent=state.vervalError||'Pengambilan data Verval gagal';else statusEl.textContent='Belum diperiksa';}
   if(batchEl){
     const label=matched?(matched.priorityType==='Non Prioritas'||/non[\\s_-]*prioritas/i.test(String(matched.batch||''))?'Non Prioritas':
       (Array.isArray(matched.categories)&&matched.categories.length?matched.categories.join(' · '):(matched.batch||''))):'';
@@ -665,7 +665,15 @@ window.__vervalDirectResult=function(payload){
         Array.isArray(result.coverage)&&result.coverage.length?'Kategori sudah dipindai: '+result.coverage.join(', '):'',
         d.text?'Teks halaman: '+String(d.text).slice(0,500):''
       ].filter(Boolean).join(' · ').slice(0,1800);
-      throw new Error((result?.message||'Data Verval tidak berhasil dibaca.')+(summaries?' Diagnostik: '+summaries:''));
+      const message=(result?.message||'Data Verval tidak berhasil dibaca.')+(summaries?' Diagnostik: '+summaries:'');
+      state.vervalRecords=[];
+      state.vervalMatchState='error';
+      state.vervalError=message;
+      state.vervalUpdatedAt=new Date().toISOString();
+      persist();
+      setVervalStatus(message,true);
+      showToast(message);
+      return;
     }
     const sourceRows=(Array.isArray(result.records)?result.records:[]).map(x=>({
       name:String(x.name||'').trim(),batch:x.batch==null?'':String(x.batch),
@@ -731,7 +739,7 @@ window.__vervalDirectResult=function(payload){
     state.vervalPhase2Rows=phase2Rows;
     state.vervalStatsSource=String(result.source||'API statistik SIMKOPDES');
     if(!matched){
-      state.vervalRecords=[];state.vervalMatchState='not_found';persist();
+      state.vervalRecords=[];state.vervalMatchState='not_found';state.vervalError='';persist();renderVervalPage();
       const coverageNote=coverageComplete
         ?`Kategori yang diperiksa: ${coverageLabel}.`
         :`Cakupan belum dapat dipastikan. Kategori yang berhasil terdeteksi: ${coverageLabel}. Periksa diagnostik kategori portal.`;
@@ -743,8 +751,8 @@ window.__vervalDirectResult=function(payload){
       }
       throw new Error(`Nama ${getPlacementDisplayName()} belum ditemukan. ${coverageNote}`);
     }
-    if(matched.ambiguous){state.vervalRecords=[];state.vervalMatchState='ambiguous';persist();throw new Error('Lebih dari satu aset cocok dengan nama Kopdes penempatan. Hasil tidak dipilih otomatis.');}
-    state.vervalRecords=[matched];state.vervalMatchState='matched';persist();
+    if(matched.ambiguous){state.vervalRecords=[];state.vervalMatchState='ambiguous';state.vervalError='Lebih dari satu aset cocok dengan nama Kopdes penempatan. Hasil tidak dipilih otomatis.';persist();renderVervalPage();throw new Error(state.vervalError);}
+    state.vervalRecords=[matched];state.vervalMatchState='matched';state.vervalError='';persist();renderVervalPage();
     const note=[result.regionalFacilitatorNote,result.endpointNotes,result.assetApiNote].filter(Boolean).join(' ');
     const coverageNote=coverageComplete
       ?`Seluruh kategori yang terdeteksi sudah diperiksa: ${coverageLabel}.`
@@ -756,9 +764,17 @@ window.__vervalDirectResult=function(payload){
     setVervalStatus(`Data ditemukan: ${matched.name} (${formatVervalNumber(matched.assetCount||1)} bidang/baris). Kategori: ${categoryList||matched.priorityType||matched.batch||'tidak teridentifikasi'}. Status: ${matched.resultStatus}. ${coverageNote}${paginationNote} ${note}`);
     showToast(coverageComplete?'Data Verval berhasil diperbarui untuk seluruh kategori.':'Data ditemukan, tetapi cakupan kategori perlu diperiksa.');
   }catch(e){
-    setVervalStatus(e.message||'Pengambilan data SIMKOPDES gagal.',true);
-    showToast(e.message||'Pengambilan data SIMKOPDES gagal.');
-  }finally{if(btn){btn.disabled=false;btn.textContent='✓ Cek Data Verval';}}
+    const message=e.message||'Pengambilan data SIMKOPDES gagal.';
+    if(state.vervalMatchState!=='not_found'&&state.vervalMatchState!=='ambiguous'){
+      state.vervalRecords=[];state.vervalMatchState='error';state.vervalError=message;persist();
+    }
+    renderVervalPage();
+    setVervalStatus(message,true);
+    showToast(message);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='✓ Cek Data Verval';}
+    renderVervalPage();
+  }
 };
 function setVervalRegionLoadStatus(message,isError=false){
   const el=$('#vervalRegionLoadStatus');if(el){el.textContent=message;el.classList.toggle('verval-error',!!isError);}
@@ -837,7 +853,7 @@ function startPlacementVerval(provinceName,districtName,assignment){
   }
   state.vervalRecords=[];state.vervalProvinceStats=null;state.vervalPhase2Rows=[];
   state.vervalAssignment=districtName;state.vervalProvince=provinceName;state.vervalMatchState='checking';
-  state.vervalUpdatedAt='';persist();
+  state.vervalUpdatedAt='';state.vervalError='';persist();
   const dialog=$('#vervalRegionDialog');if(dialog?.open)dialog.close();
   const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=true;btn.textContent='Mengambil data…';}
   setVervalStatus(`Lokasi otomatis dari kartu penugasan: ${provinceName} → ${districtName}. Mengisi passcode dan mencari ${getPlacementDisplayName()}…`);
