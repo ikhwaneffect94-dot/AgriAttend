@@ -43,7 +43,10 @@ const pendingApi = new Map();
 const VERVAL_PROVINCES = [
  ['11','Aceh'],['12','Sumatera Utara'],['13','Sumatera Barat'],['14','Riau'],['15','Jambi'],['16','Sumatera Selatan'],['17','Bengkulu'],['18','Lampung'],['19','Kepulauan Bangka Belitung'],['21','Kepulauan Riau'],['31','DKI Jakarta'],['32','Jawa Barat'],['33','Jawa Tengah'],['34','DI Yogyakarta'],['35','Jawa Timur'],['36','Banten'],['51','Bali'],['52','Nusa Tenggara Barat'],['53','Nusa Tenggara Timur'],['61','Kalimantan Barat'],['62','Kalimantan Tengah'],['63','Kalimantan Selatan'],['64','Kalimantan Timur'],['65','Kalimantan Utara'],['71','Sulawesi Utara'],['72','Sulawesi Tengah'],['73','Sulawesi Selatan'],['74','Sulawesi Tenggara'],['75','Gorontalo'],['76','Sulawesi Barat'],['81','Maluku'],['82','Maluku Utara'],['91','Papua'],['92','Papua Barat'],['93','Papua Selatan'],['94','Papua Tengah'],['95','Papua Pegunungan'],['96','Papua Barat Daya']
 ];
-const VERVAL_FALLBACK_REGENCIES = {'62':['Kabupaten Kotawaringin Barat','Kabupaten Kotawaringin Timur','Kabupaten Kapuas','Kabupaten Barito Selatan','Kabupaten Barito Utara','Kabupaten Katingan','Kabupaten Seruyan','Kabupaten Sukamara','Kabupaten Lamandau','Kabupaten Gunung Mas','Kabupaten Pulang Pisau','Kabupaten Murung Raya','Kabupaten Barito Timur','Kota Palangka Raya']};
+const VERVAL_FALLBACK_REGENCIES = {
+ '62':['Kabupaten Kotawaringin Barat','Kabupaten Kotawaringin Timur','Kabupaten Kapuas','Kabupaten Barito Selatan','Kabupaten Barito Utara','Kabupaten Katingan','Kabupaten Seruyan','Kabupaten Sukamara','Kabupaten Lamandau','Kabupaten Gunung Mas','Kabupaten Pulang Pisau','Kabupaten Murung Raya','Kabupaten Barito Timur','Kota Palangka Raya'],
+ '63':['Kabupaten Balangan','Kabupaten Banjar','Kabupaten Barito Kuala','Kabupaten Hulu Sungai Selatan','Kabupaten Hulu Sungai Tengah','Kabupaten Hulu Sungai Utara','Kabupaten Kotabaru','Kabupaten Tabalong','Kabupaten Tanah Bumbu','Kabupaten Tanah Laut','Kabupaten Tapin','Kota Banjarbaru','Kota Banjarmasin']
+};
 
 function loadState(){
   try {
@@ -697,7 +700,7 @@ function populateVervalProvinces(selectedProvince=''){
   select.dataset.initialized='1';
   return select.value;
 }
-async function loadVervalRegencies(provinceId){
+async function loadVervalRegencies(provinceId,preferredDistrict=''){
   const requestToken=++vervalRegionLoadToken;
   const select=$('#vervalDistrictSelect'),confirm=$('#confirmVervalCheck');if(!select)return;
   select.disabled=true;if(confirm)confirm.disabled=true;
@@ -727,7 +730,8 @@ async function loadVervalRegencies(provinceId){
   rows.sort((a,b)=>a.name.localeCompare(b.name,'id'));
   if(!rows.length){select.innerHTML='<option value="">Daftar kabupaten/kota tidak tersedia</option>';setVervalRegionLoadStatus('Daftar wilayah belum dapat diambil. Coba lagi ketika koneksi tersedia.',true);return;}
   select.innerHTML='<option value="">Pilih kabupaten/kota</option>'+rows.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');
-  const preferred=samePlacementProvince&&suggested?rows.find(x=>normalizeRegionName(x.name)===normalizeRegionName(suggested)):null;
+  const districtTarget=preferredDistrict|| (samePlacementProvince?suggested:'');
+  const preferred=districtTarget?rows.find(x=>normalizeRegionName(x.name)===normalizeRegionName(districtTarget)):null;
   select.value=preferred?preferred.name:'';
   select.disabled=false;
   if(confirm)confirm.disabled=!select.value;
@@ -739,7 +743,8 @@ function openVervalRegionDialog(){
   const provinceSelect=$('#vervalProvinceSelect'),districtSelect=$('#vervalDistrictSelect'),dialog=$('#vervalRegionDialog');
   vervalRegionLoadToken++;
   const parts=getPlacementKopdesParts(),placement=getPlacementRegion();
-  const provinceId=populateVervalProvinces(placement.province);
+  const preferredProvince=state.vervalProvince||placement.province;
+  const provinceId=populateVervalProvinces(preferredProvince);
   districtSelect.disabled=true;
   districtSelect.innerHTML=provinceId?'<option value="">Memuat kabupaten/kota penugasan…</option>':'<option value="">Pilih provinsi terlebih dahulu</option>';
   $('#confirmVervalCheck').disabled=true;
@@ -748,7 +753,7 @@ function openVervalRegionDialog(){
   const hint=parts.length>=3?`Target nama: ${parts[parts.length-1]}. Wilayah penugasan terbaca: ${placement.kabupaten||'Kabupaten belum terdeteksi'}${placement.province?' · '+placement.province:''}.`:'';
   setVervalRegionLoadStatus(hint+(provinceId?' Memuat kabupaten/kota penugasan secara otomatis…':' Pilih provinsi terlebih dahulu, kemudian pilih kabupaten/kota.'));
   if(dialog&&!dialog.open)dialog.showModal();
-  if(provinceId)loadVervalRegencies(provinceId).catch(error=>setVervalRegionLoadStatus(error.message||'Gagal memuat kabupaten/kota.',true));
+  if(provinceId)loadVervalRegencies(provinceId,state.vervalAssignment||placement.kabupaten).catch(error=>setVervalRegionLoadStatus(error.message||'Gagal memuat kabupaten/kota.',true));
 }
 function refreshVervalFacilitatorAccessInfo(){
   const status=$('#vervalFacilitatorAccessStatus');
