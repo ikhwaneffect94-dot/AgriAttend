@@ -1,4 +1,4 @@
-AgriAttend v1.6.9 test report
+AgriAttend v1.7.0 test report
 
 Changes:
 - Expands the hidden SIMKOPDES Verval automation to scan all detected category controls rather than stopping at the first visible result table.
@@ -21,3 +21,9 @@ Not yet verified:
 - Actual current SIMKOPDES category controls and their click behavior on the target device.
 - Whether all five category groups are exposed as tabs/dropdown options or require a different API route.
 - Successful discovery of KDKMP Teluk Palinget specifically under Non Prioritas.
+
+v1.7.0 performance and targeting changes:
+- Auto-selects province and regency/city from the AgriConnect assignment data shown in the Verval card; manual region selection remains only when the profile data is incomplete.
+- Retains the scan of all detected Batch 1–4 and Non Prioritas categories.
+- Caps pagination at six pages per category, reduces waits for region/category/page transitions, and changes the overall timeout to 90 seconds.
+- Needs live Android validation to confirm the profile's region fields and portal category controls; six-page cap means deeper pagination beyond page six is intentionally not traversed in this faster pass.
