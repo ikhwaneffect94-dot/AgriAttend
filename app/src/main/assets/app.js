@@ -748,9 +748,12 @@ window.__vervalDirectResult=function(payload){
     const note=[result.regionalFacilitatorNote,result.endpointNotes,result.assetApiNote].filter(Boolean).join(' ');
     const coverageNote=coverageComplete
       ?`Seluruh kategori yang terdeteksi sudah diperiksa: ${coverageLabel}.`
-      :`Perhatian: cakupan kategori belum terkonfirmasi lengkap. Terdeteksi: ${coverageLabel}.`;
+      :`Perhatian: cakupan belum lengkap. Terdeteksi: ${coverageLabel}.`;
+    const paginationNote=result.paginationComplete===false
+      ?' Sebagian halaman tabel belum selesai dimuat; ulangi pemeriksaan untuk melanjutkan.'
+      :'';
     const categoryList=(matched.categories||[]).filter(Boolean).join(', ');
-    setVervalStatus(`Data ditemukan: ${matched.name} (${formatVervalNumber(matched.assetCount||1)} bidang/baris). Kategori: ${categoryList||matched.priorityType||matched.batch||'tidak teridentifikasi'}. Status: ${matched.resultStatus}. ${coverageNote} ${note}`);
+    setVervalStatus(`Data ditemukan: ${matched.name} (${formatVervalNumber(matched.assetCount||1)} bidang/baris). Kategori: ${categoryList||matched.priorityType||matched.batch||'tidak teridentifikasi'}. Status: ${matched.resultStatus}. ${coverageNote}${paginationNote} ${note}`);
     showToast(coverageComplete?'Data Verval berhasil diperbarui untuk seluruh kategori.':'Data ditemukan, tetapi cakupan kategori perlu diperiksa.');
   }catch(e){
     setVervalStatus(e.message||'Pengambilan data SIMKOPDES gagal.',true);
