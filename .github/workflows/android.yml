@@ -79,7 +79,7 @@ jobs:
           import textwrap, xml.etree.ElementTree as ET
           ET.parse('app/src/main/AndroidManifest.xml')
           gradle = open('app/build.gradle', encoding='utf-8').read()
-          assert "versionCode 36" in gradle and "versionName '1.7.7'" in gradle
+          assert "versionCode 37" in gradle and "versionName '1.7.8'" in gradle
           native = open('app/src/main/java/id/agriattend/app/SimkopdesVervalActivity.java', encoding='utf-8').read()
           assert native.count("run().catch(error=>") == 1, "Verval automation runner must be declared exactly once"
           assert "webView.setVisibility(View.VISIBLE)" in native
@@ -108,18 +108,21 @@ jobs:
           app = open('app/src/main/assets/app.js', encoding='utf-8').read()
           assert "function armVervalWatchdog()" in app
           assert "function getFriendlyVervalError(result)" in app
+          assert "function isVervalDiagnosticText(value)" in app
+          assert "function cleanVervalDisplayText(value,maxLength=180)" in app
           assert "assetStatusIndex=findIndex(/status data aset|status aset|kondisi aset/)" in native
           assert "replace(/\\s+/g,' ').trim()" in app
           assert "replace(/\\\\\\\\s+/g,' ').trim()" not in app
           assert "const message=getFriendlyVervalError(result);" in app
           assert "Diagnostik: '+summaries" not in app
-          assert "matched.ownership||'Belum tersedia'" in app
+          assert "cleanVervalDisplayText(matched.ownership,100)||'Belum tersedia'" in app
           assert "matched.ownership||matched.assetStatus" not in app
+          assert "const isGlobalSearch=" in native
           assert "assetCount:Number(x.assetCount||1)" not in app
           assert "function normalizeRegionName(value){return normalizeRegionText(value);}" in app
           assert "function normalizeRegionText(value)" in app
           assert "provinsi|province" in app and "district|subdistrict" in app
-          assert "const CLIENT_VERSION = '1.7.7';" in app
+          assert "const CLIENT_VERSION = '1.7.8';" in app
           assert "function getPlacementKopdesSearchName()" in app
           assert "const hasKopdesMarker=" in app
           assert "placeholder.test(v)" in app
@@ -129,7 +132,7 @@ jobs:
           assert "AndroidBridge.clearSecureSession" not in restore
           assert "Akun AgriConnect tetap tersimpan." in restore
           sw = open('app/src/main/assets/sw.js', encoding='utf-8').read()
-          assert "agriattend-shell-v1.7.7" in sw
+          assert "agriattend-shell-v1.7.8" in sw
           assert "self.skipWaiting()" in sw and "self.clients.claim()" in sw
           assert "return tokens.slice(-2).join(' ')" in app
           assert "parts.slice(1,-2).join(' ')" in app
@@ -148,6 +151,7 @@ jobs:
           assert "© ikhwan_effect" in html
           css = open('app/src/main/assets/styles.css', encoding='utf-8').read()
           assert ".app-credit" in css
+          assert ".verval-placement-result[hidden],.verval-regional-stats-panel[hidden],#vervalPhase2Details[hidden]{display:none!important}" in css
           assert "repeat(2,minmax(0,1fr))" in css
           import re
           ui_text = html + app
@@ -168,7 +172,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgriAttend-debug-APK-v1.7.7
+          name: AgriAttend-debug-APK-v1.7.8
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
