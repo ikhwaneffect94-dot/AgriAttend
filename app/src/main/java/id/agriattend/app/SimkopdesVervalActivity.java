@@ -174,7 +174,7 @@ public final class SimkopdesVervalActivity extends Activity {
         webView.loadUrl(PORTAL_URL);
         webView.postDelayed(() -> {
             if (!completed) fail("Waktu tunggu portal Verval habis sebelum tabel hasil diterima.");
-        }, 180000);
+        }, 90000);
     }
 
     private String buildAutomationScript() {
@@ -271,14 +271,14 @@ public final class SimkopdesVervalActivity extends Activity {
               return;
             }
             report('Provinsi terpilih. Memuat pilihan kabupaten/kota…');
-            await sleep(900);
+            await sleep(500);
             const d = await chooseRegion(district,'district',p.select);
             if(!d){
               bridge.onComplete(JSON.stringify({success:false,message:'Pilihan kabupaten/kota tidak terdeteksi setelah provinsi dipilih.',diagnostics:snapshot()}));
               return;
             }
             report('Kabupaten/kota terpilih. Mengisi passcode Verval secara otomatis…');
-            await sleep(450);
+            await sleep(250);
             const passInput = Array.from(document.querySelectorAll('input,textarea')).filter(visible).find(el=>{
               const meta=[el.type,el.id,el.name,el.placeholder,el.getAttribute('aria-label'),el.getAttribute('autocomplete')].join(' ');
               return el.type==='password' || /passcode|passkey|password|kode.?akses|kata.?sandi|pin/i.test(meta);
@@ -440,7 +440,7 @@ public final class SimkopdesVervalActivity extends Activity {
               })||null;
             }
 
-            async function waitForTableChange(previousSignature,maxWait=1400){
+            async function waitForTableChange(previousSignature,maxWait=850){
               const deadline=Date.now()+maxWait;
               while(Date.now()<deadline){
                 await sleep(200);
@@ -454,7 +454,7 @@ public final class SimkopdesVervalActivity extends Activity {
               const category=label||activeCategoryLabel()||'Kategori awal';
               const pageSignatures=new Set();
               let pages=0;
-              const maxPagesPerCategory=20;
+              const maxPagesPerCategory=6;
               while(pages<maxPagesPerCategory){
                 await sleep(180);
                 const extracted=extractCurrentRows(category);
@@ -496,7 +496,7 @@ public final class SimkopdesVervalActivity extends Activity {
                 setter.call(select,option.value);
                 select.dispatchEvent(new Event('input',{bubbles:true}));
                 select.dispatchEvent(new Event('change',{bubbles:true}));
-                await sleep(1000);
+                await sleep(500);
                 return true;
               }
               const selector='[role=tab],button,[role=button],a,li,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item';
