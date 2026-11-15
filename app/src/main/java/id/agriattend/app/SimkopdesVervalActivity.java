@@ -193,21 +193,30 @@ public final class SimkopdesVervalActivity extends Activity {
           const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
           const report = message => { try { bridge.onStatus(String(message || '')); } catch(_){} };
           const visible = el => !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
-          const snapshot = () => ({
-            url: location.href,
-            title: document.title,
-            text: (document.body && document.body.innerText || '').replace(/\\s+/g,' ').slice(0,1600),
-            selects: Array.from(document.querySelectorAll('select')).slice(0,20).map(s=>({
-              id:s.id, name:s.name, aria:s.getAttribute('aria-label'),
-              label:s.labels && Array.from(s.labels).map(x=>x.innerText).join(' '),
-              options:Array.from(s.options).slice(0,25).map(o=>o.textContent.trim())
-            })),
-            inputs: Array.from(document.querySelectorAll('input')).slice(0,20).map(x=>({
-              id:x.id,name:x.name,type:x.type,placeholder:x.placeholder,
-              aria:x.getAttribute('aria-label')
-            })),
-            buttons: Array.from(document.querySelectorAll('button,[role=button],input[type=submit]')).slice(0,30).map(x=>(x.innerText||x.value||x.getAttribute('aria-label')||'').trim()).filter(Boolean)
-          });
+          const snapshot = () => {
+            const categoryPattern = /\\bbatch\\s*[-:#]?\\s*[1-4]\\b|non[\\s_-]*prioritas|^prioritas$/i;
+            const visibleNodes = Array.from(document.querySelectorAll('[role=tab],button,[role=button],a,li,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item'))
+              .filter(el=>visible(el))
+              .map(el=>String(el.innerText||el.textContent||el.getAttribute('aria-label')||'').replace(/\\s+/g,' ').trim())
+              .filter(value=>value && value.length<=100);
+            return {
+              url: location.href,
+              title: document.title,
+              text: (document.body && document.body.innerText || '').replace(/\\s+/g,' ').slice(0,1800),
+              selects: Array.from(document.querySelectorAll('select')).slice(0,25).map(s=>({
+                id:s.id, name:s.name, aria:s.getAttribute('aria-label'),
+                label:s.labels && Array.from(s.labels).map(x=>x.innerText).join(' '),
+                options:Array.from(s.options).slice(0,40).map(o=>o.textContent.trim())
+              })),
+              inputs: Array.from(document.querySelectorAll('input,textarea')).slice(0,25).map(x=>({
+                id:x.id,name:x.name,type:x.type,placeholder:x.placeholder,
+                aria:x.getAttribute('aria-label')
+              })),
+              buttons: Array.from(document.querySelectorAll('button,[role=button],input[type=submit]')).slice(0,50).map(x=>(x.innerText||x.value||x.getAttribute('aria-label')||'').trim()).filter(Boolean),
+              tabs: visibleNodes.filter(value=>/\\b(batch|prioritas)\\b/i.test(value)).slice(0,40),
+              categoryControls: visibleNodes.filter(value=>categoryPattern.test(value)).slice(0,40)
+            };
+          };
           function optionFor(select,target){
             const exact = Array.from(select.options).find(o=>norm(o.textContent)===norm(target));
             if(exact) return exact;
