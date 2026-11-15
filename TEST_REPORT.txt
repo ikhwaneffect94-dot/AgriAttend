@@ -1,20 +1,23 @@
-AgriAttend v1.6.8 test report
+AgriAttend v1.6.9 test report
 
-Included source changes:
-- Added a Verval modal with province and regency/city selectors inside AgriAttend.
-- The province list uses the Indonesian province code list; regency/city options load dynamically and have fallback lists for Kalimantan Tengah and Kalimantan Selatan.
-- The native bridge launches a hidden, 1x1 WebView runtime; no official SIMKOPDES page is visually displayed.
-- The runtime attempts province selection, regency/city selection, automatic passcode fill, official submit, and table extraction.
-- Parsed table fields are returned to the AgriAttend Verval callback for cooperative-name matching.
-- Failure diagnostics report safe DOM metadata but do not include input values.
-- The shared passcode is compiled into the APK and is not logged or rendered in the UI.
-- CAPTCHA, login, and denied access are not bypassed.
-- Android versionName 1.6.8, versionCode 27.
+Changes:
+- Expands the hidden SIMKOPDES Verval automation to scan all detected category controls rather than stopping at the first visible result table.
+- Detects Batch 1, Batch 2, Batch 3, Batch 4, Prioritas, and Non Prioritas in tabs/buttons/links and select options.
+- Re-collects table rows after each category selection.
+- Follows enabled pagination controls, up to 50 pages per category.
+- Preserves the active category and parses category/batch/prioritas columns.
+- Deduplicates rows and groups multiple asset rows for the same cooperative before matching the AgriConnect assignment.
+- Displays Non Prioritas distinctly from Batch 1–4.
+- Returns category coverage metadata and warns when the live portal does not expose enough controls to confirm full coverage.
+- Extends the hidden WebView workflow timeout to 180 seconds.
+- Android versionName 1.6.9, versionCode 28.
 
-Build verification:
-- Pending after the duplicate MainActivity activity-result handler was merged into the existing file-selection callback.
+Static verification:
+- Node syntax check for app.js is included in GitHub Actions.
+- Android manifest XML and version metadata are checked.
+- Android Gradle build, APK output verification, and artifact upload are checked.
 
 Not yet verified:
-- Current SIMKOPDES page selectors and passcode form behavior on an actual Android device.
-- Whether the official result table uses native select/HTML table elements or custom widgets requiring selector adjustments.
-- Successful result parsing and match against KDKMP Teluk Palinget.
+- Actual current SIMKOPDES category controls and their click behavior on the target device.
+- Whether all five category groups are exposed as tabs/dropdown options or require a different API route.
+- Successful discovery of KDKMP Teluk Palinget specifically under Non Prioritas.
