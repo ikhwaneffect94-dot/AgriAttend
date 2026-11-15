@@ -199,7 +199,7 @@ public final class SimkopdesVervalActivity extends Activity {
           const bridge = window.AgriVervalBridge;
           const norm = value => String(value || '').normalize('NFD')
             .replace(/[\\u0300-\\u036f]/g,'').toLowerCase()
-            .replace(/\\b(provinsi|province|kabupaten|kab\\.?|kota administrasi|kota|regency|city)\\b/g,' ')
+            .replace(/\\b(provinsi|province|kabupaten|kab\\.?|kota administrasi|kota|regency|city|kecamatan|kec\\.?|district|subdistrict)\\b/g,' ')
             .replace(/[^a-z0-9]+/g,' ').trim().replace(/\\s+/g,' ');
           const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
           const report = message => { try { bridge.onStatus(String(message || '')); } catch(_){} };
@@ -303,7 +303,7 @@ public final class SimkopdesVervalActivity extends Activity {
             await sleep(650);
             const k = await chooseRegion(subdistrict,'subdistrict',[p.select,d.select]);
             if(!k){
-              bridge.onComplete(JSON.stringify({success:false,message:'Kecamatan '+subdistrict+' tidak ditemukan pada pilihan portal setelah Kabupaten '+regency+' dipilih.',diagnostics:snapshot()}));
+              bridge.onComplete(JSON.stringify({success:false,message:'Pilihan kecamatan penugasan belum tersedia pada portal SIMKOPDES setelah kabupaten dipilih.',diagnostics:snapshot()}));
               return;
             }
             report('Kecamatan '+subdistrict+' terpilih. Menyiapkan pencarian '+assignmentSearchName+'…');
@@ -398,8 +398,9 @@ public final class SimkopdesVervalActivity extends Activity {
                 const headers=Array.from(headerRow.querySelectorAll('th,td,[role=columnheader]')).map(textOf);
                 const headerNorm=headers.map(norm);
                 const findIndex=pattern=>headerNorm.findIndex(header=>pattern.test(header));
-                const nameIndex=findIndex(/nama.*(koperasi|kopdes|kdkmp|kdmp)|nama koperasi|nama kopdes|koperasi|kopdes|kdkmp|kdmp/);
+                const nameIndex=findIndex(/^nama(?: koperasi| kopdes| kdkmp| kdmp)?$|nama.*(koperasi|kopdes|kdkmp|kdmp)|koperasi|kopdes|kdkmp|kdmp/);
                 const statusIndex=findIndex(/status|hasil|verifikasi|verval|kelayakan/);
+                const assetStatusIndex=findIndex(/status data aset|status aset|kondisi aset/);
                 const batchIndex=findIndex(/batch|tahap/);
                 const categoryIndex=findIndex(/prioritas|kategori|kelompok/);
                 const ownerIndex=findIndex(/kepemilikan|pemilik|status tanah|hak tanah/);
@@ -407,7 +408,7 @@ public final class SimkopdesVervalActivity extends Activity {
                 const latitudeIndex=findIndex(/latitude|lintang/);
                 const longitudeIndex=findIndex(/longitude|bujur/);
                 const coordinateIndex=findIndex(/koordinat|coordinate|lokasi/);
-                const countIndex=findIndex(/jumlah bidang|jumlah aset|bidang aset|total bidang/);
+                const countIndex=findIndex(/jumlah.*(bidang|aset)|bidang.*aset|total.*bidang|total aset/);
                 for(const row of rowEls){
                   if(row===headerRow) continue;
                   const cells=Array.from(row.querySelectorAll('td,[role=cell]')).map(textOf);
@@ -415,7 +416,7 @@ public final class SimkopdesVervalActivity extends Activity {
                   const raw={};
                   headers.forEach((header,index)=>{if(header)raw[header]=cells[index]||'';});
                   const at=index=>index>=0?(cells[index]||''):'';
-                  const name=at(nameIndex)||cells.find((cell,index)=>cell && !/^\\d+$/.test(cell) && index<3)||'';
+                  const name=at(nameIndex);
                   if(!name) continue;
                   const tableBatch=at(batchIndex)||categoryLabel||activeCategoryLabel()||'';
                   const category=at(categoryIndex)||categoryLabel||activeCategoryLabel()||'';
@@ -441,13 +442,13 @@ public final class SimkopdesVervalActivity extends Activity {
                     batch:batch||null,
                     priorityType:nonPriority?'Non Prioritas':(batchMatch?'Prioritas':''),
                     category:category||categoryLabel||'',
-                    resultStatus:at(statusIndex)||'Status Verval tersedia pada tabel resmi',
-                    assetCount:Number.isFinite(parsedCount)&&parsedCount>0?parsedCount:1,
+                    resultStatus:at(statusIndex)||at(assetStatusIndex),
+                    assetCount:Number.isFinite(parsedCount)&&parsedCount>0?parsedCount:null,
                     latitude:Number.isFinite(lat)?lat:null,
                     longitude:Number.isFinite(lng)?lng:null,
                     ownership:at(ownerIndex),
                     surveyor:at(surveyorIndex),
-                    assetStatus:at(statusIndex),
+                    assetStatus:at(assetStatusIndex)||at(statusIndex),
                     sourceText:sourceText,
                     rawFields:raw
                   });
