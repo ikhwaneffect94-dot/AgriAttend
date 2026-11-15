@@ -530,15 +530,17 @@ public class MainActivity extends Activity {
      */
     private static final int REQUEST_SIMKOPDES_VERVAL = 4103;
 
-    private void startSimkopdesVervalAutomation(String province, String district, String assignment) {
+    private void startSimkopdesVervalAutomation(String province, String regency, String subdistrict, String assignment, String searchName) {
         String p = province == null ? "" : province.trim();
-        String d = district == null ? "" : district.trim();
+        String r = regency == null ? "" : regency.trim();
+        String k = subdistrict == null ? "" : subdistrict.trim();
         String a = assignment == null ? "" : assignment.trim();
-        if (p.isEmpty() || d.isEmpty() || a.isEmpty()) {
+        String q = searchName == null ? "" : searchName.trim();
+        if (p.isEmpty() || r.isEmpty() || k.isEmpty() || a.isEmpty() || q.isEmpty()) {
             JSONObject failure = new JSONObject();
             try {
                 failure.put("success", false);
-                failure.put("message", "Provinsi, kabupaten/kota, dan nama Kopdes penugasan wajib tersedia.");
+                failure.put("message", "Provinsi, kabupaten, kecamatan, dan nama Kopdes penugasan wajib tersedia.");
                 failure.put("records", new org.json.JSONArray());
             } catch (Exception ignored) { }
             postVervalDirectResult(failure);
@@ -548,8 +550,10 @@ public class MainActivity extends Activity {
             try {
                 Intent intent = new Intent(MainActivity.this, SimkopdesVervalActivity.class);
                 intent.putExtra("province", p);
-                intent.putExtra("district", d);
+                intent.putExtra("regency", r);
+                intent.putExtra("subdistrict", k);
                 intent.putExtra("assignment", a);
+                intent.putExtra("search_name", q);
                 startActivityForResult(intent, REQUEST_SIMKOPDES_VERVAL);
             } catch (Exception error) {
                 JSONObject failure = new JSONObject();
@@ -659,8 +663,8 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void startSimkopdesVervalAutomation(String province, String district, String assignment) {
-            MainActivity.this.startSimkopdesVervalAutomation(province, district, assignment);
+        public void startSimkopdesVervalAutomation(String province, String regency, String subdistrict, String assignment, String searchName) {
+            MainActivity.this.startSimkopdesVervalAutomation(province, regency, subdistrict, assignment, searchName);
         }
 
         @JavascriptInterface
