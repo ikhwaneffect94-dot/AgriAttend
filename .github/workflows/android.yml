@@ -149,8 +149,8 @@ jobs:
           assert "function getVervalCategoryLabel(record)" in app
           assert "function levenshteinDistance(a,b)" in app
           assert "function fuzzyKopdesNameScore(candidate,name)" in app
-          assert "Masuk: ${category}" in app
-          assert "},100000);" in app
+          assert "Kategori: ${category}" in app
+          assert "},180000);" in app
           assert "state.vervalRecords=[matched]" in app and "renderVervalPage();" in app
           public_api = open('app/src/main/java/id/agriattend/app/SimkopdesPublicApi.java', encoding='utf-8').read()
           assert "fetchAssignedCooperativeByName" in public_api
