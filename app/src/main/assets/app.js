@@ -500,7 +500,7 @@ function getPlacementKopdes(){
     if(!obj||typeof obj!=='object'||depth>6||seen.has(obj))return;seen.add(obj);
     for(const [key,value] of Object.entries(obj)){
       if(typeof value==='string'&&value.trim()){
-        const k=key.toLowerCase(),v=value.trim();if(v.length<5||v.length>180)continue;
+        const k=key.toLowerCase().replace(/[_\-\s]/g,''),v=value.trim();if(v.length<5||v.length>180)continue;
         let score=0;
         if(/kdkmp|kdmp|kopdes|koperasi desa|merah putih/i.test(v))score+=100;
         if(v.includes('_'))score+=30;
@@ -544,7 +544,7 @@ function getPlacementKopdesSearchName(){
 }
 function getPlacementDisplayName(){
   const raw=getPlacementKopdes(),searchName=getPlacementKopdesSearchName();
-  if(/^(?:kdkmp|kdmp)[\s_|-]/i.test(raw))return \`KDKMP \${searchName}\`;
+  if(/^(?:kdkmp|kdmp)[\s_|-]/i.test(raw))return `KDKMP ${searchName}`;
   return formatPlacementName(raw)||'Nama Kopdes belum tersedia';
 }
 function normalizeKopdesName(value){
@@ -581,7 +581,7 @@ function getPlacementRegion(){
     const v=clean(value);
     if(!v)return '';
     if(/^(kabupaten|kab\.?|kota|kecamatan|kec\.?)\b/i.test(v))return v;
-    return \`\${label} \${v}\`;
+    return `${label} ${v}`;
   };
   let kabupaten='',kecamatan='',province='';
   const regency=values.find(x=>x.kind==='regency'),city=values.find(x=>x.kind==='city');
@@ -609,7 +609,7 @@ function getPlacementRegion(){
   // Do not guess multi-word kecamatan names from flattened underscore fragments.
   if(code&&parts.length>=3){
     if(!kabupaten)kabupaten=withPrefix(parts[0],'Kabupaten');
-    if(!kecamatan&&parts.length===3)kecamatan=withPrefix(parts[1],'Kecamatan');
+    if(!kecamatan&&parts.length>=4)kecamatan=withPrefix(parts.slice(1,-2).join(' '),'Kecamatan');
   }
   if(!province){
     const key=normalizeRegionName(kabupaten).replace(/\s/g,'');
@@ -983,7 +983,7 @@ function armVervalWatchdog(){
     setVervalStatus(message,true);
     const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=false;btn.textContent='✓ Cek Data Verval';}
     showToast('Pengambilan data Verval melewati batas waktu.');
-  },70000);
+  },100000);
 }
 function startPlacementVerval(provinceName,regencyName,subdistrictName,assignment,searchName){
   if(!session){showAuth('Login AgriConnect diperlukan untuk membuka Pantauan Verval.');return;}
