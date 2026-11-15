@@ -660,8 +660,11 @@ window.__vervalDirectResult=function(payload){
         Array.isArray(d.selects)&&d.selects.length?'Dropdown: '+d.selects.map(s=>(s.label||s.aria||s.id||s.name||'select')+' ['+(s.options||[]).slice(0,8).join(', ')+']').join('; '):'',
         Array.isArray(d.inputs)&&d.inputs.length?'Input: '+d.inputs.map(x=>(x.id||x.name||x.type||'input')+' '+(x.placeholder||'')).join('; '):'',
         Array.isArray(d.buttons)&&d.buttons.length?'Tombol: '+d.buttons.join(' / '):'',
+        Array.isArray(d.categoryControls)&&d.categoryControls.length?'Tab/filter batch: '+d.categoryControls.join(', '):'',
+        Array.isArray(result.categoryControls)&&result.categoryControls.length?'Kategori ditemukan: '+result.categoryControls.join(', '):'',
+        Array.isArray(result.coverage)&&result.coverage.length?'Kategori sudah dipindai: '+result.coverage.join(', '):'',
         d.text?'Teks halaman: '+String(d.text).slice(0,500):''
-      ].filter(Boolean).join(' · ').slice(0,1500);
+      ].filter(Boolean).join(' · ').slice(0,1800);
       throw new Error((result?.message||'Data Verval tidak berhasil dibaca.')+(summaries?' Diagnostik: '+summaries:''));
     }
     const sourceRows=(Array.isArray(result.records)?result.records:[]).map(x=>({
