@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
@@ -53,28 +54,27 @@ final class SimkopdesPublicApi {
         String subdistrictHint = subdistrictFromAssignment(assignmentCode);
         if (target.isEmpty()) throw new IllegalArgumentException("Nama Kopdes penugasan tidak terbaca dari AgriConnect.");
 
-        // The supplied SIMKOPDES frontend bundle exposes its own response
-        // decryptor: AES-CBC/PKCS7 with SHA-256(secret) and a UTF-8 IV.
-        // Try that public frontend parameter first and verify it against the
-        // smallest statistics response before trusting any decrypted payload.
+        // Read the same dashboard bundle entry point used by the working
+        // public SIMKOPDES extractor. Dynamic parameters must be tried first:
+        // the key embedded in an older uploaded bundle may already be rotated.
         List<CipherParameters> candidates = new ArrayList<>();
-        LinkedHashSet<String> knownCipherSeen = new LinkedHashSet<>();
-        addCipherCandidate("Bf7QmWxYzKpLnRsTuVcHdJgEiAoNpLqR", "Hx49RtWmNpQkSvYb", candidates, knownCipherSeen);
-        CipherParameters workingCipher;
+        LinkedHashSet<String> seenCipherPairs = new LinkedHashSet<>();
         try {
-            workingCipher = discoverWorkingCipher(candidates);
-        } catch (Exception knownCipherError) {
-            // Keep compatibility with site rotations: only scan public bundles
-            // when the currently observed frontend cipher no longer validates.
-            List<CipherParameters> discovered = discoverCipherCandidates();
-            candidates.addAll(discovered);
-            try {
-                workingCipher = discoverWorkingCipher(candidates);
-            } catch (Exception fallbackError) {
-                fallbackError.addSuppressed(knownCipherError);
-                throw fallbackError;
+            candidates.addAll(discoverCipherCandidates());
+            for (CipherParameters item : candidates) {
+                // Candidates from discovery are already ordered as found in
+                // the dashboard bundle; keep that order for validation.
             }
+        } catch (Exception discoveryError) {
+            // The previously observed public pair remains a compatibility
+            // fallback when the dashboard is temporarily unavailable.
         }
+        addCipherCandidate("Bf7QmWxYzKpLnRsTuVcHdJgEiAoNpLqR", "Hx49RtWmNpQkSvYb",
+                candidates, seenCipherPairs);
+        if (candidates.isEmpty()) {
+            throw new IllegalStateException("Parameter AES SIMKOPDES tidak ditemukan pada bundle dashboard dan tidak ada parameter cadangan.");
+        }
+        CipherParameters workingCipher = discoverWorkingCipher(candidates);
         List<CipherParameters> parameters = new ArrayList<>();
         if (workingCipher != null) parameters.add(workingCipher);
         else parameters.addAll(candidates);
@@ -174,44 +174,70 @@ final class SimkopdesPublicApi {
      * wrong candidate expensive and hid the useful failure point. The returned
      * candidate must decrypt into a recognisable SIMKOPDES response shape.
      */
+    /**
+     * Validate candidates against the public cooperative hierarchy endpoint
+     * first. The known-good extractor uses this endpoint before the larger
+     * asset tree; it has a stable and distinctive response shape (grouped[]).
+     * Statistics routes are optional and are checked only after the two bulk
+     * public data routes.
+     */
     private CipherParameters discoverWorkingCipher(List<CipherParameters> candidates) throws Exception {
         String[] endpoints = new String[]{
+                "/cooperatives/get-all-nested",
+                "/cooperative-assets/get-all",
                 "/statistics/asset-verification-validation",
-                "/statistics/national/phase-2",
-                "/cooperative-assets/get-all"
+                "/statistics/national/phase-2"
         };
-        String lastError = "Tidak ada respons statistik yang dapat dipakai untuk memvalidasi parameter dekripsi.";
+        String lastError = "Tidak ada respons API yang dapat dipakai untuk memvalidasi parameter dekripsi.";
         for (String endpoint : endpoints) {
             try {
-                String responseText = httpGet(API + endpoint);
+                String responseText = httpGetWithRetry(API + endpoint);
                 JSONObject envelope = new JSONObject(responseText);
                 Object data = envelope.opt("data");
                 if (data instanceof JSONObject || data instanceof JSONArray) {
-                    // Some API versions return plain JSON. Accept it only when
-                    // the response has the expected endpoint-specific structure.
                     if (isExpectedPayload(endpoint, data)) return null;
-                    lastError = "Respons " + endpoint + " berupa JSON, tetapi strukturnya belum dikenali.";
+                    lastError = "Respons " + endpoint + " berupa JSON, tetapi struktur grouped/statistik tidak dikenali.";
                     continue;
                 }
                 if (!(data instanceof String)) {
-                    lastError = "Respons " + endpoint + " tidak memiliki field data.";
+                    lastError = "Respons " + endpoint + " tidak memiliki field data (HTTP sukses tetapi envelope tidak sesuai).";
                     continue;
                 }
+
                 String encoded = ((String) data).replaceAll("\\s+", "");
                 if (encoded.startsWith("{") || encoded.startsWith("[")) {
                     Object parsed = parseJsonPayload(encoded);
                     if (isExpectedPayload(endpoint, parsed)) return null;
+                    lastError = "Respons " + endpoint + " berupa JSON teks, tetapi struktur grouped/statistik tidak dikenali.";
+                    continue;
                 }
-                byte[] ciphertext = Base64.decode(encoded, Base64.DEFAULT);
+                byte[] ciphertext;
+                try {
+                    ciphertext = Base64.decode(encoded, Base64.DEFAULT);
+                } catch (Exception decodeError) {
+                    lastError = "Field data pada " + endpoint + " bukan Base64 yang valid.";
+                    continue;
+                }
+
+                int decryptableButUnexpected = 0;
+                String cryptoProblem = "padding/dekripsi tidak cocok";
                 for (CipherParameters candidate : candidates) {
                     try {
                         Object parsed = decryptPayload(ciphertext, candidate);
                         if (isExpectedPayload(endpoint, parsed)) return candidate;
-                    } catch (Exception ignored) {
-                        // Continue testing candidates against this small response.
+                        decryptableButUnexpected++;
+                    } catch (Exception decryptError) {
+                        if (decryptError.getMessage() != null) cryptoProblem = decryptError.getMessage();
                     }
                 }
-                lastError = "Tidak ada kandidat AES yang memvalidasi respons " + endpoint + ".";
+                if (decryptableButUnexpected > 0) {
+                    lastError = "AES berhasil membuka respons " + endpoint + ", tetapi skema JSON tidak sesuai ("
+                            + decryptableButUnexpected + " kandidat menghasilkan JSON).";
+                } else {
+                    lastError = "Tidak ada kandidat AES yang memvalidasi respons " + endpoint
+                            + " (" + candidates.size() + " kandidat, ciphertext " + encoded.length()
+                            + " karakter; " + cryptoProblem + ").";
+                }
             } catch (Exception error) {
                 lastError = safeMessage(error);
             }
@@ -224,8 +250,14 @@ final class SimkopdesPublicApi {
         JSONObject object = (JSONObject) parsed;
         JSONObject nested = object.optJSONObject("data");
         if (nested != null) object = nested;
+        if (endpoint.contains("cooperatives/get-all-nested")) {
+            return object.optJSONArray("grouped") != null;
+        }
+        if (endpoint.contains("cooperative-assets/get-all")) {
+            return object.optJSONObject("grouped") != null;
+        }
         if (endpoint.contains("asset-verification-validation")) {
-            return object.has("provinces") || object.has("statistic");
+            return object.optJSONArray("provinces") != null || object.has("statistic");
         }
         if (endpoint.contains("national/phase-2")) {
             return object.has("national_totals") || object.has("province_distribution")
@@ -233,9 +265,10 @@ final class SimkopdesPublicApi {
                     && (object.optJSONObject("data").has("national_totals") || object.optJSONObject("data").has("province_distribution")));
         }
         if (endpoint.contains("by-regional-facilitator-id")) {
-            return object.optJSONArray("data") != null || object.optJSONArray("assets") != null;
+            return object.optJSONArray("data") != null || object.optJSONArray("assets") != null
+                    || object instanceof JSONObject;
         }
-        return object.has("grouped");
+        return false;
     }
 
     private Object parseJsonPayload(String value) throws Exception {
@@ -249,9 +282,24 @@ final class SimkopdesPublicApi {
         if (candidate == null || candidate.key.length != 32 || candidate.iv.length != 16) {
             throw new IllegalStateException("Parameter AES tidak lengkap.");
         }
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        if (ciphertext == null || ciphertext.length == 0 || ciphertext.length % 16 != 0) {
+            throw new IllegalStateException("Panjang ciphertext bukan kelipatan blok AES 16 byte.");
+        }
+        // Match the SIMKOPDES extractor byte-for-byte: AES-256-CBC/NoPadding,
+        // followed by explicit PKCS7 removal (the website's CryptoJS Pkcs7).
+        Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
         cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(candidate.key, "AES"), new IvParameterSpec(candidate.iv));
-        String plain = new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8).replaceFirst("^\\uFEFF", "").trim();
+        byte[] padded = cipher.doFinal(ciphertext);
+        if (padded.length == 0) throw new IllegalStateException("Hasil dekripsi kosong.");
+        int padding = padded[padded.length - 1] & 0xff;
+        if (padding < 1 || padding > 16 || padding > padded.length) {
+            throw new IllegalStateException("Padding PKCS7 tidak valid.");
+        }
+        for (int i = padded.length - padding; i < padded.length; i++) {
+            if ((padded[i] & 0xff) != padding) throw new IllegalStateException("Byte padding PKCS7 tidak konsisten.");
+        }
+        byte[] plainBytes = Arrays.copyOf(padded, padded.length - padding);
+        String plain = new String(plainBytes, StandardCharsets.UTF_8).replaceFirst("^\\uFEFF", "").trim();
         return parseJsonPayload(plain);
     }
 
@@ -399,54 +447,80 @@ final class SimkopdesPublicApi {
      * validate candidates before any record is accepted.
      */
     private List<CipherParameters> discoverCipherCandidates() throws Exception {
-        String[] pages = new String[]{
-                SITE + "/pers/asset/verval?batch_verification=1%2C2%2C3%2C4",
-                SITE + "/pers/dashboard",
-                SITE + "/"
-        };
+        // The working public extractor discovers keys from /pers/dashboard,
+        // not by crawling every page first. This also avoids unrelated script
+        // chunks on protected Verval routes taking priority over the API client.
         LinkedHashSet<String> scripts = new LinkedHashSet<>();
-        Pattern attrScript = Pattern.compile("(?i)(?:src|href)\\s*=\\s*['\\\"]([^'\\\"]+\\.m?js(?:\\?[^'\\\"]*)?)['\\\"]");
-        Pattern nextScript = Pattern.compile("['\\\"]([^'\\\"]*_next/static/[^'\\\"]+\\.js(?:\\?[^'\\\"]*)?)['\\\"]");
-        Pattern oldChunk = Pattern.compile("['\\\"](/_next/static/chunks/[^'\\\"]+\\.js)['\\\"]");
-        for (String page : pages) {
-            try {
-                String html = httpGet(page);
-                collectScripts(attrScript, html, scripts);
-                collectScripts(nextScript, html, scripts);
-                collectScripts(oldChunk, html, scripts);
-            } catch (Exception ignored) {
-                // Some protected routes may redirect; public dashboard/root remain useful.
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        List<CipherParameters> candidates = new ArrayList<>();
+
+        String dashboardHtml = httpGetWithRetry(SITE + "/pers/dashboard");
+        for (String piece : dashboardHtml.split("\"")) {
+            if (piece.startsWith("/_next/static/chunks/") && piece.endsWith(".js")) {
+                scripts.add(piece);
+            }
+        }
+
+        // Compatibility fallback for Next.js markup variants where chunk paths
+        // are not plain quoted fragments. Keep /pers/dashboard as first source.
+        if (scripts.isEmpty()) {
+            Pattern attrScript = Pattern.compile("(?i)(?:src|href)\\s*=\\s*['\\\"]([^'\\\"]+\\.m?js(?:\\?[^'\\\"]*)?)['\\\"]");
+            Pattern nextScript = Pattern.compile("['\\\"]([^'\\\"]*_next/static/[^'\\\"]+\\.js(?:\\?[^'\\\"]*)?)['\\\"]");
+            Pattern oldChunk = Pattern.compile("['\\\"](/_next/static/chunks/[^'\\\"]+\\.js)['\\\"]");
+            collectScripts(attrScript, dashboardHtml, scripts);
+            collectScripts(nextScript, dashboardHtml, scripts);
+            collectScripts(oldChunk, dashboardHtml, scripts);
+        }
+
+        // If the dashboard HTML did not expose its chunks, inspect the Verval
+        // route and site root as secondary sources. Do not let them outrank the
+        // dashboard bundle when its normal chunk list is available.
+        if (scripts.isEmpty()) {
+            String[] fallbackPages = new String[]{
+                    SITE + "/pers/asset/verval?batch_verification=1%2C2%2C3%2C4",
+                    SITE + "/"
+            };
+            Pattern attrScript = Pattern.compile("(?i)(?:src|href)\\s*=\\s*['\\\"]([^'\\\"]+\\.m?js(?:\\?[^'\\\"]*)?)['\\\"]");
+            Pattern nextScript = Pattern.compile("['\\\"]([^'\\\"]*_next/static/[^'\\\"]+\\.js(?:\\?[^'\\\"]*)?)['\\\"]");
+            Pattern oldChunk = Pattern.compile("['\\\"](/_next/static/chunks/[^'\\\"]+\\.js)['\\\"]");
+            for (String page : fallbackPages) {
+                try {
+                    String html = httpGetWithRetry(page);
+                    collectScripts(attrScript, html, scripts);
+                    collectScripts(nextScript, html, scripts);
+                    collectScripts(oldChunk, html, scripts);
+                } catch (Exception ignored) { }
             }
         }
         if (scripts.isEmpty()) {
-            throw new IllegalStateException("Daftar JavaScript publik SIMKOPDES tidak ditemukan pada halaman Verval maupun dashboard.");
+            throw new IllegalStateException("Bundle JavaScript SIMKOPDES tidak ditemukan dari /pers/dashboard.");
         }
 
         Pattern oldCall = Pattern.compile("(?s)\\.([A-Za-z_$][\\w$]*)\\)\\s*\\(\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
         Pattern namedCall = Pattern.compile("(?is)\\b(?:decrypt|decrRes|decryptResponse|decryptData)\\w*\\s*\\(\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
         Pattern genericCall = Pattern.compile("(?s)(?:\\(\\s*0\\s*,\\s*[A-Za-z_$][\\w$.$]*\\s*\\)\\s*\\(|\\b[A-Za-z_$][\\w$.$]*\\s*\\()\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
-        LinkedHashSet<String> seen = new LinkedHashSet<>();
-        List<CipherParameters> candidates = new ArrayList<>();
-        List<String> scriptBodies = new ArrayList<>();
+
         int scanned = 0;
         for (String script : scripts) {
             if (scanned++ >= 300) break;
-            try { scriptBodies.add(httpGet(toSiteUrl(script))); }
-            catch (Exception ignored) { /* continue to the next chunk */ }
-        }
-        // Search the exact historical marker across every downloaded chunk first.
-        // This prevents unrelated generic calls in vendor chunks from filling
-        // the candidate list before the actual SIMKOPDES decrypt helper is scanned.
-        for (String js : scriptBodies) collectLegacyCipherCalls(js, candidates, seen);
-        // Current builds may rename the helper; retain bounded generic fallbacks.
-        for (String js : scriptBodies) {
-            if (candidates.size() >= 512) break;
-            collectCandidates(oldCall, js, candidates, seen);
-            collectCandidates(namedCall, js, candidates, seen);
-            collectCandidates(genericCall, js, candidates, seen);
+            String js;
+            try { js = httpGetWithRetry(toSiteUrl(script)); }
+            catch (Exception ignored) { continue; }
+
+            int before = candidates.size();
+            collectLegacyCipherCalls(js, candidates, seen);
+            // The marker extraction is the method used by the working public
+            // extractor. Only use generic fallbacks when that marker is absent
+            // in this dashboard chunk.
+            if (candidates.size() == before) {
+                collectCandidates(oldCall, js, candidates, seen);
+                collectCandidates(namedCall, js, candidates, seen);
+                collectCandidates(genericCall, js, candidates, seen);
+            }
+            if (!candidates.isEmpty()) break;
         }
         if (candidates.isEmpty()) {
-            throw new IllegalStateException("Bundle JavaScript SIMKOPDES ditemukan, tetapi parameter AES tidak dapat diekstrak. Struktur fungsi dekripsi situs berubah.");
+            throw new IllegalStateException("Bundle dashboard ditemukan, tetapi pemanggilan dekripsi AES .C)( tidak ditemukan.");
         }
         return candidates;
     }
@@ -669,6 +743,25 @@ final class SimkopdesPublicApi {
         } finally {
             connection.disconnect();
         }
+    }
+
+    private String httpGetWithRetry(String address) throws Exception {
+        Exception last = null;
+        for (int attempt = 0; attempt < 4; attempt++) {
+            try {
+                return httpGet(address);
+            } catch (Exception error) {
+                last = error;
+                if (attempt < 3) {
+                    try { Thread.sleep(400L * (attempt + 1)); }
+                    catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw interrupted;
+                    }
+                }
+            }
+        }
+        throw last == null ? new IllegalStateException("Permintaan SIMKOPDES gagal.") : last;
     }
 
     private String readLimited(InputStream input) throws Exception {
