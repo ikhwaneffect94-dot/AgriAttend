@@ -454,8 +454,9 @@ public final class SimkopdesVervalActivity extends Activity {
               const category=label||activeCategoryLabel()||'Kategori awal';
               const pageSignatures=new Set();
               let pages=0;
-              while(pages<50){
-                await sleep(350);
+              const maxPagesPerCategory=20;
+              while(pages<maxPagesPerCategory){
+                await sleep(180);
                 const extracted=extractCurrentRows(category);
                 tableCounts.count=Math.max(tableCounts.count,extracted.tableCount);
                 const signature=extracted.records.map(row=>row.sourceText).join('¦');
@@ -465,12 +466,22 @@ public final class SimkopdesVervalActivity extends Activity {
                   allRecords.push(...extracted.records);
                 }
                 pages++;
+                report('Memindai '+category+' · halaman '+pages+' · '+allRecords.length+' baris terkumpul…');
                 const next=getNextPageControl();
                 if(!next) break;
+                if(pages>=maxPagesPerCategory){
+                  tableCounts.paginationComplete=false;
+                  break;
+                }
                 const before=signature;
                 next.click();
-                if(!await waitForTableChange(before)) break;
+                if(!await waitForTableChange(before,1400)){
+                  tableCounts.paginationComplete=false;
+                  break;
+                }
               }
+              tableCounts.pagesByCategory=tableCounts.pagesByCategory||{};
+              tableCounts.pagesByCategory[category]=pages;
               if(category && !coverage.includes(category)) coverage.push(category);
             }
 
@@ -500,7 +511,7 @@ public final class SimkopdesVervalActivity extends Activity {
 
             const allRecords=[];
             const coverage=[];
-            const tableCounts={count:0};
+            const tableCounts={count:0,paginationComplete:true,pagesByCategory:{}};
             const initialCategory=activeCategoryLabel();
             await collectCurrentCategory(initialCategory,allRecords,coverage,tableCounts);
             let entries=categoryControls();
@@ -526,7 +537,7 @@ public final class SimkopdesVervalActivity extends Activity {
               || allRecords.some(row=>new RegExp('batch\\\\s*'+number,'i').test([row.batch,row.category,row.sourceText].join(' ')))
             );
             const tableHasCategoryColumn=allRecords.some(row=>/prioritas|batch/i.test(Object.keys(row.rawFields||{}).join(' ')));
-            const coverageComplete=hasNonPriority&&(hasBatchSelection||coverage.some(label=>/^prioritas$/i.test(label))||tableHasCategoryColumn);
+            const coverageComplete=hasNonPriority&&(hasBatchSelection||coverage.some(label=>/^prioritas$/i.test(label))||tableHasCategoryColumn)&&tableCounts.paginationComplete!==false;
             const uniqueRows=new Map();
             for(const row of allRecords){
               const key=[norm(row.name),row.cooperativeId||'',row.batch||'',norm(row.sourceText)].join('|');
@@ -541,6 +552,8 @@ public final class SimkopdesVervalActivity extends Activity {
                 rowCount:records.length,coverage:coverage,
                 observedCategories:observedCategories,
                 coverageComplete:coverageComplete,
+                paginationComplete:tableCounts.paginationComplete,
+                pagesByCategory:tableCounts.pagesByCategory,
                 nonPriorityFound:hasNonPriority
               }));
               return;
@@ -552,7 +565,9 @@ public final class SimkopdesVervalActivity extends Activity {
               message:'Passcode diterima, tetapi data tabel tidak ditemukan pada kategori yang berhasil diperiksa.',
               diagnostics:finalSnapshot,
               coverage:coverage,
-              categoryControls:entries.map(entry=>entry.label)
+              categoryControls:entries.map(entry=>entry.label),
+              paginationComplete:tableCounts.paginationComplete,
+              pagesByCategory:tableCounts.pagesByCategory
             }));
             return;
           }
