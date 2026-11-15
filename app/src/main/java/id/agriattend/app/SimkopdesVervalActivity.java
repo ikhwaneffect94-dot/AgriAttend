@@ -101,8 +101,11 @@ public final class SimkopdesVervalActivity extends Activity {
         // This WebView is attached so the page's JavaScript and DOM can run,
         // but it is never visible or touchable.
         webView = new WebView(this);
+        // Keep a real viewport so the portal's responsive form and table use
+        // the same layout dimensions as a normal device browser. The WebView
+        // remains visually transparent and cannot receive user interaction.
         webView.setAlpha(0f);
-        webView.setVisibility(View.INVISIBLE);
+        webView.setVisibility(View.VISIBLE);
         webView.setClickable(false);
         webView.setFocusable(false);
         webView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
@@ -163,7 +166,8 @@ public final class SimkopdesVervalActivity extends Activity {
             }
         });
 
-        root.addView(webView, new LinearLayout.LayoutParams(dp(1), dp(1)));
+        root.addView(webView, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         setContentView(root);
 
         if (province.isEmpty() || district.isEmpty() || assignment.isEmpty()) {
@@ -173,7 +177,7 @@ public final class SimkopdesVervalActivity extends Activity {
 
         webView.loadUrl(PORTAL_URL);
         webView.postDelayed(() -> {
-            if (!completed) fail("Waktu tunggu portal Verval habis sebelum tabel hasil diterima.");
+            if (!completed) fail("Waktu tunggu 60 detik habis. Portal tidak menyelesaikan pemuatan data. Coba lagi; proses tidak dibiarkan berputar tanpa batas.");
         }, 60000);
     }
 
@@ -626,10 +630,21 @@ public final class SimkopdesVervalActivity extends Activity {
             data.putExtra("verval_result_json", result.toString());
             setResult(RESULT_OK, data);
         } catch (Exception error) {
-            Intent data = new Intent();
-            data.putExtra("verval_result_json", new JSONObject()
-                    .toString());
-            setResult(RESULT_OK, data);
+            try {
+                JSONObject failure = new JSONObject();
+                failure.put("success", false);
+                failure.put("message", "Hasil Verval tidak dapat dikirim ke AgriAttend: " + error.getMessage());
+                failure.put("records", new JSONArray());
+                failure.put("province", province);
+                failure.put("district", district);
+                failure.put("assignment", assignment);
+                failure.put("passcodeSubmitted", passcodeSubmitted);
+                Intent data = new Intent();
+                data.putExtra("verval_result_json", failure.toString());
+                setResult(RESULT_OK, data);
+            } catch (Exception nested) {
+                setResult(RESULT_CANCELED);
+            }
         }
         finish();
     }
