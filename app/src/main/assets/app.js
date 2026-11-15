@@ -64,6 +64,7 @@ function loadState(){
       vervalAssignment: saved.vervalAssignment || '',
       vervalProvince: saved.vervalProvince || '',
       vervalMatchState: saved.vervalMatchState || '',
+      vervalError: saved.vervalError || '',
       vervalProvinceStats: saved.vervalProvinceStats && typeof saved.vervalProvinceStats === 'object' ? saved.vervalProvinceStats : null,
       vervalPhase2Rows: Array.isArray(saved.vervalPhase2Rows) ? saved.vervalPhase2Rows : [],
       vervalStatsSource: saved.vervalStatsSource || ''
