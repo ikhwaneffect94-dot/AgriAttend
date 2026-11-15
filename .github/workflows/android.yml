@@ -79,7 +79,7 @@ jobs:
           import textwrap, xml.etree.ElementTree as ET
           ET.parse('app/src/main/AndroidManifest.xml')
           gradle = open('app/build.gradle', encoding='utf-8').read()
-          assert "versionCode 35" in gradle and "versionName '1.7.6'" in gradle
+          assert "versionCode 36" in gradle and "versionName '1.7.7'" in gradle
           native = open('app/src/main/java/id/agriattend/app/SimkopdesVervalActivity.java', encoding='utf-8').read()
           assert native.count("run().catch(error=>") == 1, "Verval automation runner must be declared exactly once"
           assert "webView.setVisibility(View.VISIBLE)" in native
@@ -89,6 +89,11 @@ jobs:
           assert "const regency = %s;" in native and "const subdistrict = %s;" in native
           assert "const assignmentSearchName = %s;" in native
           assert "chooseRegion(subdistrict,'subdistrict',[p.select,d.select])" in native
+          assert "kecamatan|kec" in native
+          assert "const name=at(nameIndex);" in native
+          assert "assetCount:Number.isFinite(parsedCount)&&parsedCount>0?parsedCount:null" in native
+          assert "assetCount:Number.isFinite(parsedCount)&&parsedCount>0?parsedCount:1" not in native
+          assert "Kecamatan '+subdistrict+' tidak ditemukan" not in native
           assert "if(!wanted || wanted.length<3) return null;" in native
           assert ".filter(item=>item.label.length>=3)" in native
           assert "function applyAssignmentSearch()" in native
@@ -102,10 +107,16 @@ jobs:
           open('/tmp/verval-automation-check.js', 'w', encoding='utf-8').write(script)
           app = open('app/src/main/assets/app.js', encoding='utf-8').read()
           assert "function armVervalWatchdog()" in app
+          assert "function getFriendlyVervalError(result)" in app
+          assert "const message=getFriendlyVervalError(result);" in app
+          assert "Diagnostik: '+summaries" not in app
+          assert "matched.ownership||'Belum tersedia'" in app
+          assert "matched.ownership||matched.assetStatus" not in app
+          assert "assetCount:Number(x.assetCount||1)" not in app
           assert "function normalizeRegionName(value){return normalizeRegionText(value);}" in app
           assert "function normalizeRegionText(value)" in app
           assert "provinsi|province" in app and "district|subdistrict" in app
-          assert "const CLIENT_VERSION = '1.7.6';" in app
+          assert "const CLIENT_VERSION = '1.7.7';" in app
           assert "function getPlacementKopdesSearchName()" in app
           assert "const hasKopdesMarker=" in app
           assert "placeholder.test(v)" in app
@@ -115,7 +126,7 @@ jobs:
           assert "AndroidBridge.clearSecureSession" not in restore
           assert "Akun AgriConnect tetap tersimpan." in restore
           sw = open('app/src/main/assets/sw.js', encoding='utf-8').read()
-          assert "agriattend-shell-v1.7.6" in sw
+          assert "agriattend-shell-v1.7.7" in sw
           assert "self.skipWaiting()" in sw and "self.clients.claim()" in sw
           assert "return tokens.slice(-2).join(' ')" in app
           assert "parts.slice(1,-2).join(' ')" in app
@@ -154,7 +165,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgriAttend-debug-APK-v1.7.6
+          name: AgriAttend-debug-APK-v1.7.7
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
