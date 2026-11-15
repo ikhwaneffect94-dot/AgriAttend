@@ -77,9 +77,17 @@ jobs:
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
           ET.parse('app/src/main/AndroidManifest.xml')
-          text = open('app/build.gradle', encoding='utf-8').read()
-          assert "versionCode 30" in text and "versionName '1.7.1'" in text
-          print('Manifest XML and version metadata OK')
+          gradle = open('app/build.gradle', encoding='utf-8').read()
+          assert "versionCode 30" in gradle and "versionName '1.7.1'" in gradle
+          native = open('app/src/main/java/id/agriattend/app/SimkopdesVervalActivity.java', encoding='utf-8').read()
+          assert native.count("run().catch(error=>") == 1, "Verval automation runner must be declared exactly once"
+          assert "webView.setVisibility(View.VISIBLE)" in native
+          assert "LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f" in native
+          app = open('app/src/main/assets/app.js', encoding='utf-8').read()
+          assert "function armVervalWatchdog()" in app
+          assert "state.vervalRecords=[matched]" in app and "renderVervalPage();" in app
+          assert "state.vervalMatchState='error'" in app
+          print('Manifest, version, Verval runner, viewport, callback rendering, and watchdog checks OK')
           PY
 
       - name: Build APK
