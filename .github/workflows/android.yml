@@ -89,6 +89,8 @@ jobs:
           assert "const regency = %s;" in native and "const subdistrict = %s;" in native
           assert "const assignmentSearchName = %s;" in native
           assert "chooseRegion(subdistrict,'subdistrict',[p.select,d.select])" in native
+          assert "if(!wanted || wanted.length<3) return null;" in native
+          assert ".filter(item=>item.label.length>=3)" in native
           assert "function applyAssignmentSearch()" in native
           assert "assignmentSearchName" in native
           assert "const maxPagesPerCategory=12" in native
