@@ -811,20 +811,38 @@ async function loadVervalRegencies(provinceId,preferredDistrict=''){
 }
 function openVervalRegionDialog(){
   if(!session){showAuth('Login AgriConnect diperlukan untuk membuka Pantauan Verval.');return;}
+  const placement=getPlacementRegion();
+  const province=String(placement.province||'').trim();
+  const district=String(placement.kabupaten||'').trim();
+  const assignment=getPlacementKopdes();
+  if(province&&district&&assignment){startPlacementVerval(province,district,assignment);return;}
+  // Manual fallback is only used if the AgriConnect placement card lacks region fields.
   const districtSelect=$('#vervalDistrictSelect'),dialog=$('#vervalRegionDialog');
   vervalRegionLoadToken++;
-  const placement=getPlacementRegion();
-  const preferredProvince=state.vervalProvince||placement.province;
-  const provinceId=populateVervalProvinces(preferredProvince);
+  const provinceId=populateVervalProvinces(state.vervalProvince||province);
   districtSelect.disabled=true;
   districtSelect.innerHTML=provinceId?'<option value="">Memuat kabupaten/kota…</option>':'<option value="">Pilih provinsi terlebih dahulu</option>';
   $('#confirmVervalCheck').disabled=true;
   const preview=$('#vervalTargetPreview');if(preview)preview.textContent=getPlacementDisplayName();
-  const hint=`Kopdes penugasan: ${getPlacementDisplayName()}.`;
-  setVervalRegionLoadStatus(hint+(provinceId?' Memuat wilayah penugasan…':' Pilih provinsi terlebih dahulu.'));
+  setVervalRegionLoadStatus('Lokasi penugasan belum lengkap pada profil AgriConnect. Silakan pilih wilayah secara manual.');
   if(dialog&&!dialog.open)dialog.showModal();
-  if(provinceId)loadVervalRegencies(provinceId,state.vervalAssignment||placement.kabupaten)
+  if(provinceId)loadVervalRegencies(provinceId,state.vervalAssignment||district)
     .catch(error=>setVervalRegionLoadStatus(error.message||'Gagal memuat kabupaten/kota.',true));
+}
+function startPlacementVerval(provinceName,districtName,assignment){
+  if(!session){showAuth('Login AgriConnect diperlukan untuk membuka Pantauan Verval.');return;}
+  if(!provinceName||!districtName||!assignment){setVervalStatus('Data wilayah atau nama Kopdes penugasan belum lengkap.');return;}
+  if(!window.AndroidBridge||typeof AndroidBridge.startSimkopdesVervalAutomation!=='function'){
+    setVervalStatus('Mesin pengambil data Verval internal tidak tersedia pada versi ini.');return;
+  }
+  state.vervalRecords=[];state.vervalProvinceStats=null;state.vervalPhase2Rows=[];
+  state.vervalAssignment=districtName;state.vervalProvince=provinceName;state.vervalMatchState='checking';
+  state.vervalUpdatedAt='';persist();
+  const dialog=$('#vervalRegionDialog');if(dialog?.open)dialog.close();
+  const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=true;btn.textContent='Mengambil data…';}
+  setVervalStatus(`Lokasi otomatis dari kartu penugasan: ${provinceName} → ${districtName}. Mengisi passcode dan mencari ${getPlacementDisplayName()}…`);
+  try{AndroidBridge.startSimkopdesVervalAutomation(provinceName,districtName,assignment);}
+  catch(error){window.__vervalDirectResult({success:false,message:error.message||'Mesin Verval internal gagal dijalankan.',records:[]});}
 }
 function confirmVervalRegionSelection(){
   const provinceSelect=$('#vervalProvinceSelect'),districtSelect=$('#vervalDistrictSelect');
