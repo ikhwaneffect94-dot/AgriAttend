@@ -78,7 +78,7 @@ jobs:
           import textwrap, xml.etree.ElementTree as ET
           ET.parse('app/src/main/AndroidManifest.xml')
           gradle = open('app/build.gradle', encoding='utf-8').read()
-          assert "versionCode 30" in gradle and "versionName '1.7.1'" in gradle
+          assert "versionCode 31" in gradle and "versionName '1.7.2'" in gradle
           native = open('app/src/main/java/id/agriattend/app/SimkopdesVervalActivity.java', encoding='utf-8').read()
           assert native.count("run().catch(error=>") == 1, "Verval automation runner must be declared exactly once"
           assert "webView.setVisibility(View.VISIBLE)" in native
@@ -90,6 +90,9 @@ jobs:
           open('/tmp/verval-automation-check.js', 'w', encoding='utf-8').write(script)
           app = open('app/src/main/assets/app.js', encoding='utf-8').read()
           assert "function armVervalWatchdog()" in app
+          assert "function getPlacementKopdesSearchName()" in app
+          assert "function getVervalCategoryLabel(record)" in app
+          assert "Masuk: ${category}" in app
           assert "state.vervalRecords=[matched]" in app and "renderVervalPage();" in app
           assert "state.vervalMatchState='error'" in app
           print('Manifest, version, generated Verval script, viewport, callback rendering, and watchdog checks OK')
@@ -107,7 +110,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgriAttend-debug-APK-v1.7.1
+          name: AgriAttend-debug-APK-v1.7.2
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14

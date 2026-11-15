@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.7.1';
+const CLIENT_VERSION = '1.7.2';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
@@ -516,11 +516,25 @@ function getPlacementKopdesParts(){
   const raw=getPlacementKopdes();
   return raw?raw.split(/[_|,;]+/).map(x=>x.trim()).filter(Boolean).filter(x=>!/^kdkmp$|^kdmp$/i.test(x)):[];
 }
-function formatPlacementName(value){return String(value||'').replace(/[_]+/g,' ').replace(/\s+/g,' ').trim()||'Nama Kopdes belum tersedia';}
-function getPlacementDisplayName(){
+function formatPlacementName(value){return String(value||'').replace(/[_|,;]+/g,' ').replace(/\s+/g,' ').trim()||'Nama Kopdes belum tersedia';}
+function getPlacementKopdesSearchName(){
+  const raw=getPlacementKopdes().trim();
+  if(!raw)return '';
   const parts=getPlacementKopdesParts();
-  if(parts.length>=3)return `KDKMP ${parts[parts.length-1]}`;
-  return formatPlacementName(getPlacementKopdes());
+  // Preserve the final village segment for the legacy structured ID:
+  // KDKMP_<kabupaten>_<kecamatan>_<desa>.
+  if(/^(?:kdkmp|kdmp)[_|]/i.test(raw)&&parts.length>=4)
+    return formatPlacementName(parts[parts.length-1]);
+  // For ordinary names, remove only the KDKMP/KDMP prefix and keep the
+  // complete remaining name (e.g. "KDKMP Teluk Palinget" -> "Teluk Palinget").
+  return formatPlacementName(raw.replace(/^\s*(?:kdkmp|kdmp)\s*[:_|-]?\s*/i,''));
+}
+function getPlacementDisplayName(){
+  const raw=getPlacementKopdes(),parts=getPlacementKopdesParts();
+  const searchName=getPlacementKopdesSearchName();
+  if(/^(?:kdkmp|kdmp)[\s_|-]/i.test(raw)||parts.length>=3)
+    return `KDKMP ${searchName}`;
+  return formatPlacementName(raw);
 }
 function normalizeRegionName(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\b(kabupaten|kab\.?|kota administrasi|kota|provinsi|prov\.?)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
 function normalizeKopdesName(value){
@@ -575,8 +589,7 @@ function getPlacementRegion(){
   return {kabupaten:kabupaten.trim(),province:province.trim()};
 }
 function findPlacementVervalMatch(records){
-  const raw=getPlacementKopdes(),parts=getPlacementKopdesParts();
-  const candidate=normalizeKopdesName(parts.length?parts[parts.length-1]:raw);
+  const candidate=normalizeKopdesName(getPlacementKopdesSearchName());
   if(!candidate||candidate.length<5)return null;
   const scored=(records||[]).map(record=>{
     const name=normalizeKopdesName(record.name);if(!name)return {record,score:0};
@@ -586,6 +599,17 @@ function findPlacementVervalMatch(records){
   if(!scored.length)return null;
   if(scored.length>1&&scored[0].score===scored[1].score)return {ambiguous:true,matches:scored.filter(x=>x.score===scored[0].score).map(x=>x.record)};
   return scored[0].record;
+}
+function getVervalCategoryLabel(record){
+  const values=[record?.batch,record?.priorityType,record?.category,...(Array.isArray(record?.categories)?record.categories:[]),record?.sourceText]
+    .filter(value=>value!==null&&value!==undefined&&String(value).trim()!=='')
+    .map(value=>String(value).trim());
+  const text=values.join(' | ');
+  if(/non[\s_-]*prioritas/i.test(text))return 'Non Prioritas';
+  const batch=text.match(/\bbatch\s*[-:#]?\s*([1-4])\b/i);
+  if(batch)return `Batch ${batch[1]}`;
+  if(/\bprioritas\b/i.test(text))return 'Prioritas (batch belum terbaca)';
+  return 'Kategori belum terbaca';
 }
 function formatVervalNumber(value){
   if(value===null||value===undefined||value==='')return '—';
@@ -626,10 +650,11 @@ function renderVervalPage(){
   const statusEl=$('#vervalPlacementStatus'),batchEl=$('#vervalPlacementBatch'),resultPanel=$('#vervalPlacementResult');
   if(statusEl){if(matched)statusEl.textContent=matched.resultStatus||'Status pemeriksaan aset tidak terbaca';else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';else if(state.vervalMatchState==='checking')statusEl.textContent='Sedang menarik data resmi SIMKOPDES…';else if(state.vervalMatchState==='error')statusEl.textContent=state.vervalError||'Pengambilan data Verval gagal';else statusEl.textContent='Belum diperiksa';}
   if(batchEl){
-    const label=matched?(matched.priorityType==='Non Prioritas'||/non[\\s_-]*prioritas/i.test(String(matched.batch||''))?'Non Prioritas':
-      (Array.isArray(matched.categories)&&matched.categories.length?matched.categories.join(' · '):(matched.batch||''))):'';
+    const category=matched?getVervalCategoryLabel(matched):'';
+    const label=matched?`Masuk: ${category}`:'';
     batchEl.hidden=!label;
     batchEl.textContent=label;
+    batchEl.title=matched?'Kategori resmi yang terbaca dari hasil Verval SIMKOPDES':'';
   }
   if(resultPanel){
     resultPanel.hidden=!matched;
