@@ -266,40 +266,63 @@ public final class SimkopdesVervalActivity extends Activity {
             const labelIds=String(element.getAttribute('aria-labelledby')||'').split(/\\s+/)
               .map(id=>document.getElementById(id)?.innerText||'').join(' ');
             const labels=element.labels?Array.from(element.labels).map(label=>label.innerText||'').join(' '):'';
-            const field=element.closest('.form-group,.form-field,.form-item,.field,.ant-form-item,.input-group,.select-wrapper,[data-field]');
-            const fieldText=String(field?.innerText||'').replace(/\\s+/g,' ').trim().slice(0,180);
+            const ancestors=[];
+            let parent=element.parentElement;
+            for(let depth=0;parent&&depth<4;depth++,parent=parent.parentElement){
+              const text=String(parent.innerText||'').replace(/\\s+/g,' ').trim();
+              if(text&&text.length<=240&&!ancestors.includes(text))ancestors.push(text);
+            }
+            const fieldText=ancestors.join(' · ').slice(0,360);
             const own=[element.id,element.name,element.type,element.placeholder,textOf(element),
               element.getAttribute('aria-label'),element.getAttribute('data-placeholder'),
               element.getAttribute('title'),element.getAttribute('data-testid'),
+              element.getAttribute('aria-controls'),element.getAttribute('aria-autocomplete'),
               element.className,labelIds,labels].filter(Boolean).join(' ');
             return {own:own,field:fieldText,all:own+' '+fieldText};
           }
-          function isGlobalSearchControl(element,meta){
+          function isGlobalSearchControl(element,meta,regionPattern){
             const searchPattern=/search|cari|pencarian|filter|keyword|koperasi|kopdes|desa|kelurahan|passcode|password|kata.?sandi|pin/i;
-            if(searchPattern.test(meta.own)) return true;
             if(element.tagName==='INPUT'&&String(element.type||'').toLowerCase()==='password') return true;
-            return false;
+            // A searchable region control may legitimately use type=search or
+            // a select-search class. Exclude global search only when it is not
+            // associated with the currently requested administrative level.
+            return searchPattern.test(meta.own)&&!regionPattern.test(meta.all);
           }
           function regionControlCandidates(kind,excluded){
             const pattern=regionKindPattern(kind);
-            const selector='select,[role=combobox],input[readonly],input[aria-haspopup],button,[role=button],[aria-haspopup],[class*="select"],[class*="dropdown"],[data-testid*="select"]';
+            // Many portal builds render dependent regions as ordinary text
+            // inputs rather than readonly/select elements. Include them, but
+            // only probe a free-text field when its label/nearby form text
+            // identifies the requested administrative level.
+            const selector='select,input:not([type=password]):not([type=submit]):not([type=button]),textarea,[role=combobox],[role=listbox],button,[role=button],[aria-haspopup],[class*="select"],[class*="dropdown"],[data-testid*="select"],[contenteditable="true"],[tabindex]:not([tabindex="-1"])';
             const seen=new Set();
             return Array.from(document.querySelectorAll(selector)).filter(visible).filter(element=>{
               if(seen.has(element)||excluded.includes(element)||element.disabled) return false;
               seen.add(element);
               const meta=regionControlMeta(element);
-              if(isGlobalSearchControl(element,meta)) return false;
+              if(isGlobalSearchControl(element,meta,pattern)) return false;
               const explicit=pattern.test(meta.all);
-              const dropdown=element.tagName==='SELECT'||element.getAttribute('role')==='combobox'
-                ||element.hasAttribute('aria-haspopup')||/(select|dropdown|combobox)/i.test(String(element.className||''));
-              if(element.tagName==='INPUT'&&!element.readOnly&&!element.hasAttribute('aria-haspopup')&&!explicit) return false;
-              return explicit||dropdown;
+              const tag=element.tagName;
+              const inputLike=tag==='INPUT'||tag==='TEXTAREA';
+              const dropdown=tag==='SELECT'||element.getAttribute('role')==='combobox'
+                ||element.getAttribute('role')==='listbox'||element.hasAttribute('aria-haspopup')
+                ||element.hasAttribute('aria-controls')
+                ||/(select|dropdown|combobox|choices|select2)/i.test(String(element.className||''));
+              const searchableInput=inputLike&&(explicit||element.readOnly||element.hasAttribute('list')
+                ||element.hasAttribute('aria-controls')||element.hasAttribute('aria-autocomplete')
+                ||String(element.type||'').toLowerCase()==='search');
+              if(inputLike&&!searchableInput)return false;
+              return explicit||dropdown||searchableInput;
             }).map(element=>{
               const meta=regionControlMeta(element);
               const explicit=pattern.test(meta.all);
               const target=kind==='province'?'Kalimantan Tengah':kind==='regency'?'Kapuas':'Pulau Petak';
               const selectedOption=element.tagName==='SELECT'&&optionFor(element,target);
-              return {element,score:(explicit?100:0)+(element.tagName==='SELECT'?30:0)+(element.getAttribute('role')==='combobox'?20:0)+(selectedOption?50:0)};
+              const inputLike=element.tagName==='INPUT'||element.tagName==='TEXTAREA';
+              const searchable=inputLike&&(element.readOnly||element.hasAttribute('aria-controls')
+                ||element.hasAttribute('aria-autocomplete')||String(element.type||'').toLowerCase()==='search');
+              return {element,score:(explicit?120:0)+(element.tagName==='SELECT'?50:0)
+                +(element.getAttribute('role')==='combobox'?35:0)+(searchable?15:0)+(selectedOption?60:0)};
             }).sort((a,b)=>b.score-a.score).map(item=>item.element);
           }
           function optionNodeText(element){
@@ -310,22 +333,55 @@ public final class SimkopdesVervalActivity extends Activity {
             const wanted=norm(target);
             if(!wanted)return false;
             const excluded=Array.isArray(exclude)?exclude.filter(Boolean):[exclude].filter(Boolean);
-            const selector='[role=option],option,li,button,a,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"]';
+            const selector='[role=option],option,li,button,a,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"],[class*="menu-item"]';
             const candidates=Array.from(document.querySelectorAll(selector)).filter(visible).filter(el=>!excluded.includes(el))
               .map(el=>({el,text:norm(optionNodeText(el))}))
-              .filter(item=>item.text&&item.text.length<=100&&(item.text===wanted||(wanted.length>=5&&item.text.includes(wanted))));
+              .filter(item=>item.text&&item.text.length<=140&&(item.text===wanted||(wanted.length>=5&&item.text.includes(wanted))));
             candidates.sort((a,b)=>{
               const aExact=a.text===wanted?0:1,bExact=b.text===wanted?0:1;
               if(aExact!==bExact)return aExact-bExact;
-              const aPreferred=a.el.matches('[role=option],option,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"]')?0:1;
-              const bPreferred=b.el.matches('[role=option],option,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"]')?0:1;
+              const aPreferred=a.el.matches('[role=option],option,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"],[class*="menu-item"]')?0:1;
+              const bPreferred=b.el.matches('[role=option],option,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"],[class*="menu-item"]')?0:1;
               return aPreferred-bPreferred||a.text.length-b.text.length;
             });
             if(!candidates.length)return false;
             const option=candidates[0].el;
-            const clickTarget=option.closest('[role=option],option,li,button,a,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"]')||option;
+            const clickTarget=option.closest('[role=option],option,li,button,a,[data-value],[aria-selected],[role=menuitem],[class*="option"],[class*="dropdown-item"],[class*="select__option"],[class*="menu-item"]')||option;
             clickTarget.click();
             return true;
+          }
+          async function waitForCustomOption(target,exclude,maxWait=1700){
+            const deadline=Date.now()+maxWait;
+            while(Date.now()<deadline){
+              if(tryCustomOption(target,exclude))return true;
+              await sleep(140);
+            }
+            return false;
+          }
+          function setRegionQuery(control,target){
+            const proto=control.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
+            const descriptor=Object.getOwnPropertyDescriptor(proto,'value');
+            if(!descriptor||!descriptor.set)return false;
+            descriptor.set.call(control,target);
+            control.dispatchEvent(new Event('input',{bubbles:true}));
+            control.dispatchEvent(new Event('change',{bubbles:true}));
+            control.dispatchEvent(new KeyboardEvent('keyup',{key:'ArrowDown',code:'ArrowDown',bubbles:true}));
+            return true;
+          }
+          function regionDebug(kind,excluded){
+            const pattern=regionKindPattern(kind);
+            const controls=regionControlCandidates(kind,excluded).slice(0,18).map(element=>{
+              const meta=regionControlMeta(element);
+              return {tag:element.tagName,role:element.getAttribute('role')||'',type:element.getAttribute('type')||'',
+                label:meta.all.slice(0,180),expanded:element.getAttribute('aria-expanded')||'',
+                controls:element.getAttribute('aria-controls')||''};
+            });
+            const selects=Array.from(document.querySelectorAll('select')).slice(0,16).map(select=>({
+              label:regionControlMeta(select).all.slice(0,120),
+              optionCount:select.options?.length||0,
+              hasTarget:!!optionFor(select,kind==='province'?'Kalimantan Tengah':kind==='regency'?'Kapuas':'Pulau Petak')
+            }));
+            return {kind,readyState:document.readyState,controlCount:controls.length,selectCount:selects.length,controls,selects};
           }
           function dismissRegionDropdown(){
             try{document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true}));}catch(_){}
@@ -334,19 +390,37 @@ public final class SimkopdesVervalActivity extends Activity {
             const excluded=Array.isArray(exclude)?exclude.filter(Boolean):[exclude].filter(Boolean);
             const wanted=norm(target);
             if(!wanted)return null;
-            for(let attempt=0;attempt<40;attempt++){
+            let lastCandidateCount=0;
+            for(let attempt=0;attempt<16;attempt++){
               const allSelects=Array.from(document.querySelectorAll('select')).filter(el=>!excluded.includes(el)&&!el.disabled);
-              const nativeSelect=allSelects.find(select=>optionFor(select,target));
-              if(nativeSelect&&setSelect(nativeSelect,target))return {select:nativeSelect,method:'select'};
-              const controls=regionControlCandidates(kind,excluded);
-              for(const control of controls){
-                control.click();
-                await sleep(300);
-                if(tryCustomOption(target,[control]))return {select:control,method:'custom'};
-                dismissRegionDropdown();
-                await sleep(120);
+              // Prefer a native select whose own field label identifies this region.
+              const pattern=regionKindPattern(kind);
+              const nativeMatches=allSelects.filter(select=>optionFor(select,target));
+              const labelledNative=nativeMatches.find(select=>pattern.test(regionControlMeta(select).all));
+              const nativeSelect=labelledNative||nativeMatches.find(select=>visible(select));
+              if(nativeSelect&&setSelect(nativeSelect,target)){
+                nativeSelect.dispatchEvent(new Event('blur',{bubbles:true}));
+                return {select:nativeSelect,method:'select'};
               }
-              await sleep(400);
+              const controls=regionControlCandidates(kind,excluded);
+              lastCandidateCount=controls.length;
+              for(const control of controls){
+                const meta=regionControlMeta(control);
+                control.click();
+                await sleep(220);
+                if(await waitForCustomOption(target,[control],1200))return {select:control,method:'custom'};
+                // Some portal versions expose a searchable text input only after
+                // opening the field. Type the requested region into that field;
+                // never type into password/global cooperative-search controls.
+                const inputLike=control.tagName==='INPUT'||control.tagName==='TEXTAREA';
+                if(inputLike&&pattern.test(meta.all)&&!isGlobalSearchControl(control,meta,pattern)){
+                  if(setRegionQuery(control,target)&&await waitForCustomOption(target,[control],2200))
+                    return {select:control,method:'searchable-input'};
+                }
+                dismissRegionDropdown();
+                await sleep(180);
+              }
+              await sleep(420);
             }
             return null;
           }
@@ -364,11 +438,11 @@ public final class SimkopdesVervalActivity extends Activity {
               bridge.onComplete(JSON.stringify({success:false,message:'Kabupaten/kota penugasan tidak terdeteksi setelah provinsi dipilih.',diagnostics:snapshot()}));
               return;
             }
-            report('Kabupaten '+regency+' terpilih. Memuat pilihan Kecamatan '+subdistrict+'…');
-            await sleep(1000);
+            report('Kabupaten '+regency+' terpilih. Memuat daftar Kecamatan '+subdistrict+'…');
+            await sleep(1500);
             const k = await chooseRegion(subdistrict,'subdistrict',[p.select,d.select]);
             if(!k){
-              bridge.onComplete(JSON.stringify({success:false,message:'Pilihan kecamatan penugasan belum tersedia pada portal SIMKOPDES setelah kabupaten dipilih.',diagnostics:snapshot()}));
+              bridge.onComplete(JSON.stringify({success:false,message:'Pilihan kecamatan penugasan belum tersedia pada portal SIMKOPDES setelah kabupaten dipilih.',stage:'subdistrict',regionDebug:regionDebug('subdistrict',[p.select,d.select]),diagnostics:snapshot()}));
               return;
             }
             report('Kecamatan '+subdistrict+' terpilih. Menyiapkan pencarian '+assignmentSearchName+'…');
