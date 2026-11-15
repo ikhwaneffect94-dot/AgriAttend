@@ -1,29 +1,28 @@
-AgriAttend v1.7.0 test report
+AgriAttend v1.7.1 test report
 
 Changes:
-- Expands the hidden SIMKOPDES Verval automation to scan all detected category controls rather than stopping at the first visible result table.
-- Detects Batch 1, Batch 2, Batch 3, Batch 4, Prioritas, and Non Prioritas in tabs/buttons/links and select options.
-- Re-collects table rows after each category selection.
-- Follows enabled pagination controls, up to 50 pages per category.
-- Preserves the active category and parses category/batch/prioritas columns.
-- Deduplicates rows and groups multiple asset rows for the same cooperative before matching the AgriConnect assignment.
-- Displays Non Prioritas distinctly from Batch 1–4.
-- Returns category coverage metadata and warns when the live portal does not expose enough controls to confirm full coverage.
-- Extends the hidden WebView workflow timeout to 180 seconds.
-- Android versionName 1.6.9, versionCode 28.
+- Fixed the duplicated Verval JavaScript runner wrapper; the injected page script now contains one async runner.
+- Changed the hidden WebView from a 1×1 invisible viewport to a full-size, transparent, non-interactive viewport so the portal uses normal responsive layout.
+- Verval now starts from province/regency/city and cooperative assignment in the AgriConnect placement card when all are available.
+- Retained manual region selection only when placement region information is incomplete.
+- On a successful native response, the PWA stores the matched record and explicitly calls renderVervalPage() so the card displays the new data.
+- Error, not-found, and ambiguous responses update the card state; the action button is restored in the callback finally block.
+- Added a 70-second PWA watchdog to clear a stuck checking state if the native callback never returns.
+- Native WebView operation has a 60-second timeout with a visible error message.
+- Batch 1–4 and Non Prioritas category scanning remains enabled, with up to six pages per detected category.
+- The action card reports incomplete coverage when not all expected categories/page checks are confirmed.
+- Android versionName 1.7.1, versionCode 30.
 
-Static verification:
-- Node syntax check for app.js is included in GitHub Actions.
-- Android manifest XML and version metadata are checked.
-- Android Gradle build, APK output verification, and artifact upload are checked.
+Automated checks:
+- node --check app/src/main/assets/app.js
+- Extract the Java text-block Verval automation script and run node --check against the generated JavaScript.
+- Verify the automation runner appears exactly once.
+- Verify the transparent full-viewport WebView configuration.
+- Verify Verval result rendering, error-state handling, and watchdog.
+- Parse AndroidManifest.xml and confirm version metadata.
+- Run Android Gradle build, verify APK output, and upload artifact.
 
 Not yet verified:
-- Actual current SIMKOPDES category controls and their click behavior on the target device.
-- Whether all five category groups are exposed as tabs/dropdown options or require a different API route.
-- Successful discovery of KDKMP Teluk Palinget specifically under Non Prioritas.
-
-v1.7.0 performance and targeting changes:
-- Auto-selects province and regency/city from the AgriConnect assignment data shown in the Verval card; manual region selection remains only when the profile data is incomplete.
-- Retains the scan of all detected Batch 1–4 and Non Prioritas categories.
-- Caps pagination at six pages per category, reduces waits for region/category/page transitions, and changes the overall timeout to 90 seconds.
-- Needs live Android validation to confirm the profile's region fields and portal category controls; six-page cap means deeper pagination beyond page six is intentionally not traversed in this faster pass.
+- Live SIMKOPDES form selectors, passcode acceptance, category controls, pagination behavior, and table schema on the user's phone.
+- Whether the target KDKMP record is beyond page six in any category.
+- Successful end-to-end match for KDKMP Teluk Palinget.
