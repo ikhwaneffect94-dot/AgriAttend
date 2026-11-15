@@ -819,7 +819,7 @@ function renderVervalPage(){
   const preview=$('#vervalTargetPreview');if(preview)preview.textContent=getPlacementDisplayName();
   renderVervalRegionalStats();
 }
-function setVervalStatus(message,isError=false){const el=$('#vervalLiveStatus');if(el){const raw=String(message??'').replace(/\\s+/g,' ').trim();const safe=(isVervalDiagnosticText(raw)||raw.length>260)?getFriendlyVervalError({message:raw}):(cleanVervalDisplayText(raw,260)||'Proses Verval SIMKOPDES.');el.textContent=safe;el.classList.toggle('verval-error',!!isError);}}
+function setVervalStatus(message,isError=false){const el=$('#vervalLiveStatus');if(el){const raw=String(message??'').replace(/\s+/g,' ').trim();const safe=(isVervalDiagnosticText(raw)||raw.length>260)?getFriendlyVervalError({message:raw}):(cleanVervalDisplayText(raw,260)||'Proses Verval SIMKOPDES.');el.textContent=safe;el.classList.toggle('verval-error',!!isError);}}
 window.__vervalDirectStatus=function(message){setVervalStatus(String(message||'Mengambil data langsung dari SIMKOPDES…'));};
 function getFriendlyVervalError(result){
   const raw=String(result?.message||'Data Verval tidak berhasil dibaca.').replace(/\s+/g,' ').trim();
