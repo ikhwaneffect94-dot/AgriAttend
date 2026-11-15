@@ -104,6 +104,7 @@ jobs:
           assert "function armVervalWatchdog()" in app
           assert "function normalizeRegionName(value){return normalizeRegionText(value);}" in app
           assert "function normalizeRegionText(value)" in app
+          assert "provinsi|province" in app and "district|subdistrict" in app
           assert "const CLIENT_VERSION = '1.7.6';" in app
           assert "function getPlacementKopdesSearchName()" in app
           assert "const hasKopdesMarker=" in app
