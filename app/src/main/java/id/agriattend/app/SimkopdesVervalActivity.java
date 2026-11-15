@@ -513,6 +513,8 @@ public final class SimkopdesVervalActivity extends Activity {
             const coverage=[];
             const tableCounts={count:0,paginationComplete:true,pagesByCategory:{}};
             const initialCategory=activeCategoryLabel();
+            if(initialCategory) report('Memeriksa kategori awal: '+initialCategory+'…');
+            else report('Membaca tabel awal Verval…');
             await collectCurrentCategory(initialCategory,allRecords,coverage,tableCounts);
             let entries=categoryControls();
             const processed=new Set();
@@ -520,7 +522,7 @@ public final class SimkopdesVervalActivity extends Activity {
               const entry=entries[index];
               if(processed.has(entry.label)) continue;
               processed.add(entry.label);
-              report('Memeriksa '+entry.label+'…');
+              report('Memeriksa kategori '+(processed.size)+' dari '+entries.length+': '+entry.label+'…');
               if(!await activateCategory(entry)) continue;
               await collectCurrentCategory(entry.label,allRecords,coverage,tableCounts);
               entries=categoryControls();
