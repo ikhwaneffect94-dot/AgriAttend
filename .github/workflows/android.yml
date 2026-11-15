@@ -109,7 +109,7 @@ jobs:
           assert "function armVervalWatchdog()" in app
           assert "function getFriendlyVervalError(result)" in app
           assert "assetStatusIndex=findIndex(/status data aset|status aset|kondisi aset/)" in native
-          assert "replace(/\\\\s+/g,' ').trim()" in app
+          assert "replace(/\\s+/g,' ').trim()" in app
           assert "replace(/\\\\\\\\s+/g,' ').trim()" not in app
           assert "const message=getFriendlyVervalError(result);" in app
           assert "Diagnostik: '+summaries" not in app
