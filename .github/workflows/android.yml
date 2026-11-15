@@ -1,3 +1,4 @@
+# Static checks include KDKMP name extraction, category labeling, generated portal JS, and APK packaging.
 name: Build AgriAttend APK
 
 on:
