@@ -233,9 +233,14 @@ public final class SimkopdesVervalActivity extends Activity {
             };
           };
           function optionFor(select,target){
-            const exact = Array.from(select.options).find(o=>norm(o.textContent)===norm(target));
-            if(exact) return exact;
-            return Array.from(select.options).find(o=>norm(o.textContent).includes(norm(target)) || norm(target).includes(norm(o.textContent)));
+            const wanted=norm(target);
+            if(!wanted || wanted.length<3) return null;
+            const options=Array.from(select.options).map(option=>({option,label:norm(option.textContent)}))
+              .filter(item=>item.label.length>=3);
+            const exact=options.find(item=>item.label===wanted);
+            if(exact) return exact.option;
+            const partial=options.find(item=>item.label.includes(wanted)||wanted.includes(item.label));
+            return partial?partial.option:null;
           }
           function setSelect(select,target){
             const option=optionFor(select,target);
