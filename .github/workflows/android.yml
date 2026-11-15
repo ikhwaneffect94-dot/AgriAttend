@@ -120,7 +120,7 @@ jobs:
           assert "Diagnostik: '+summaries" not in app
           assert "cleanVervalDisplayText(matched.ownership,100)||'Belum tersedia'" in app
           assert "matched.ownership||matched.assetStatus" not in app
-          assert "const isGlobalSearch=" in native
+          assert "function isGlobalSearchControl(element,meta)" in native
           assert "assetCount:Number(x.assetCount||1)" not in app
           assert "function normalizeRegionName(value){return normalizeRegionText(value);}" in app
           assert "function normalizeRegionText(value)" in app
