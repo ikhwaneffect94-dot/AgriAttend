@@ -174,7 +174,7 @@ public final class SimkopdesVervalActivity extends Activity {
         webView.loadUrl(PORTAL_URL);
         webView.postDelayed(() -> {
             if (!completed) fail("Waktu tunggu portal Verval habis sebelum tabel hasil diterima.");
-        }, 90000);
+        }, 60000);
     }
 
     private String buildAutomationScript() {
@@ -475,7 +475,7 @@ public final class SimkopdesVervalActivity extends Activity {
                 }
                 const before=signature;
                 next.click();
-                if(!await waitForTableChange(before,1400)){
+                if(!await waitForTableChange(before,900)){
                   tableCounts.paginationComplete=false;
                   break;
                 }
@@ -505,7 +505,7 @@ public final class SimkopdesVervalActivity extends Activity {
               if(!target) return false;
               const clickTarget=target.closest('button,[role=tab],[role=button],a,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item')||target;
               clickTarget.click();
-              await sleep(1000);
+              await sleep(450);
               return true;
             }
 
@@ -573,10 +573,6 @@ public final class SimkopdesVervalActivity extends Activity {
             }));
             return;
           }
-          run().catch(error=>{
-            bridge.onComplete(JSON.stringify({success:false,message:'Otomasi alur Verval gagal: '+(error.message||error),diagnostics:snapshot()}));
-          });
-        })();
           run().catch(error=>{
             bridge.onComplete(JSON.stringify({success:false,message:'Otomasi alur Verval gagal: '+(error.message||error),diagnostics:snapshot()}));
           });
