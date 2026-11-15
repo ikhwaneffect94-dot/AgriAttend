@@ -648,7 +648,17 @@ window.__vervalDirectResult=function(payload){
   const btn=$('#openVervalCheckDialog');
   try{
     const result=typeof payload==='string'?JSON.parse(payload):payload;
-    if(!result||result.success!==true)throw new Error(result?.message||'API SIMKOPDES tidak mengembalikan data.');
+    if(!result||result.success!==true){
+      const d=result?.diagnostics||{};
+      const summaries=[
+        d.url?'Halaman: '+d.url:'',
+        Array.isArray(d.selects)&&d.selects.length?'Dropdown: '+d.selects.map(s=>(s.label||s.aria||s.id||s.name||'select')+' ['+(s.options||[]).slice(0,8).join(', ')+']').join('; '):'',
+        Array.isArray(d.inputs)&&d.inputs.length?'Input: '+d.inputs.map(x=>(x.id||x.name||x.type||'input')+' '+(x.placeholder||'')).join('; '):'',
+        Array.isArray(d.buttons)&&d.buttons.length?'Tombol: '+d.buttons.join(' / '):'',
+        d.text?'Teks halaman: '+String(d.text).slice(0,500):''
+      ].filter(Boolean).join(' · ').slice(0,1500);
+      throw new Error((result?.message||'Data Verval tidak berhasil dibaca.')+(summaries?' Diagnostik: '+summaries:''));
+    }
     const records=(Array.isArray(result.records)?result.records:[]).map(x=>({
       name:String(x.name||'').trim(),batch:x.batch==null?null:String(x.batch),
       cooperativeId:x.cooperativeId==null?'':String(x.cooperativeId),assetCount:Number(x.assetCount||1),
