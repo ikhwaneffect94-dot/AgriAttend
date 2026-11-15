@@ -447,12 +447,11 @@ final class SimkopdesPublicApi {
      * validate candidates before any record is accepted.
      */
     private List<CipherParameters> discoverCipherCandidates() throws Exception {
-        // The working public extractor discovers keys from /pers/dashboard,
-        // not by crawling every page first. This also avoids unrelated script
-        // chunks on protected Verval routes taking priority over the API client.
+        // Match the working public extractor: /pers/dashboard is the source
+        // of the actual API decrypt helper and its runtime key/IV arguments.
         LinkedHashSet<String> scripts = new LinkedHashSet<>();
         LinkedHashSet<String> seen = new LinkedHashSet<>();
-        List<CipherParameters> candidates = new ArrayList<>();
+        List<String> scriptBodies = new ArrayList<>();
 
         String dashboardHtml = httpGetWithRetry(SITE + "/pers/dashboard");
         for (String piece : dashboardHtml.split("\"")) {
@@ -461,8 +460,6 @@ final class SimkopdesPublicApi {
             }
         }
 
-        // Compatibility fallback for Next.js markup variants where chunk paths
-        // are not plain quoted fragments. Keep /pers/dashboard as first source.
         if (scripts.isEmpty()) {
             Pattern attrScript = Pattern.compile("(?i)(?:src|href)\\s*=\\s*['\\\"]([^'\\\"]+\\.m?js(?:\\?[^'\\\"]*)?)['\\\"]");
             Pattern nextScript = Pattern.compile("['\\\"]([^'\\\"]*_next/static/[^'\\\"]+\\.js(?:\\?[^'\\\"]*)?)['\\\"]");
@@ -472,9 +469,6 @@ final class SimkopdesPublicApi {
             collectScripts(oldChunk, dashboardHtml, scripts);
         }
 
-        // If the dashboard HTML did not expose its chunks, inspect the Verval
-        // route and site root as secondary sources. Do not let them outrank the
-        // dashboard bundle when its normal chunk list is available.
         if (scripts.isEmpty()) {
             String[] fallbackPages = new String[]{
                     SITE + "/pers/asset/verval?batch_verification=1%2C2%2C3%2C4",
@@ -496,31 +490,35 @@ final class SimkopdesPublicApi {
             throw new IllegalStateException("Bundle JavaScript SIMKOPDES tidak ditemukan dari /pers/dashboard.");
         }
 
-        Pattern oldCall = Pattern.compile("(?s)\\.([A-Za-z_$][\\w$]*)\\)\\s*\\(\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
-        Pattern namedCall = Pattern.compile("(?is)\\b(?:decrypt|decrRes|decryptResponse|decryptData)\\w*\\s*\\(\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
-        Pattern genericCall = Pattern.compile("(?s)(?:\\(\\s*0\\s*,\\s*[A-Za-z_$][\\w$.$]*\\s*\\)\\s*\\(|\\b[A-Za-z_$][\\w$.$]*\\s*\\()\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
-
         int scanned = 0;
         for (String script : scripts) {
             if (scanned++ >= 300) break;
-            String js;
-            try { js = httpGetWithRetry(toSiteUrl(script)); }
-            catch (Exception ignored) { continue; }
+            try { scriptBodies.add(httpGetWithRetry(toSiteUrl(script))); }
+            catch (Exception ignored) { }
+        }
 
-            int before = candidates.size();
+        // Important: scan ALL chunks for the exact .C)( marker before any
+        // generic regex. Vendor chunks may contain unrelated decrypt helpers;
+        // accepting one early can hide the real SIMKOPDES key in a later chunk.
+        List<CipherParameters> candidates = new ArrayList<>();
+        for (String js : scriptBodies) {
             collectLegacyCipherCalls(js, candidates, seen);
-            // The marker extraction is the method used by the working public
-            // extractor. Only use generic fallbacks when that marker is absent
-            // in this dashboard chunk.
-            if (candidates.size() == before) {
-                collectCandidates(oldCall, js, candidates, seen);
-                collectCandidates(namedCall, js, candidates, seen);
-                collectCandidates(genericCall, js, candidates, seen);
-            }
-            if (!candidates.isEmpty()) break;
+            if (!candidates.isEmpty()) return candidates;
+        }
+
+        // Only use renamed-helper patterns if the exact public marker has
+        // disappeared from the current build.
+        Pattern oldCall = Pattern.compile("(?s)\\.([A-Za-z_$][\\w$]*)\\)\\s*\\(\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
+        Pattern namedCall = Pattern.compile("(?is)\\b(?:decrypt|decrRes|decryptResponse|decryptData)\\w*\\s*\\(\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
+        Pattern genericCall = Pattern.compile("(?s)(?:\\(\\s*0\\s*,\\s*[A-Za-z_$][\\w$.$]*\\s*\\)\\s*\\(|\\b[A-Za-z_$][\\w$.$]*\\s*\\()\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
+        for (String js : scriptBodies) {
+            collectCandidates(oldCall, js, candidates, seen);
+            collectCandidates(namedCall, js, candidates, seen);
+            collectCandidates(genericCall, js, candidates, seen);
+            if (candidates.size() >= 512) break;
         }
         if (candidates.isEmpty()) {
-            throw new IllegalStateException("Bundle dashboard ditemukan, tetapi pemanggilan dekripsi AES .C)( tidak ditemukan.");
+            throw new IllegalStateException("Bundle dashboard ditemukan, tetapi pemanggilan dekripsi AES .C)( maupun fallback tidak ditemukan.");
         }
         return candidates;
     }
