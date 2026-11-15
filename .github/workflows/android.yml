@@ -75,7 +75,7 @@ jobs:
         run: |
           node --check app/src/main/assets/app.js
           python3 - <<'PY'
-          import xml.etree.ElementTree as ET
+          import textwrap, xml.etree.ElementTree as ET
           ET.parse('app/src/main/AndroidManifest.xml')
           gradle = open('app/build.gradle', encoding='utf-8').read()
           assert "versionCode 30" in gradle and "versionName '1.7.1'" in gradle
@@ -83,12 +83,18 @@ jobs:
           assert native.count("run().catch(error=>") == 1, "Verval automation runner must be declared exactly once"
           assert "webView.setVisibility(View.VISIBLE)" in native
           assert "LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f" in native
+          marker = 'return String.format(Locale.ROOT, """'
+          assert marker in native, 'Verval JavaScript text block not found'
+          script = native.split(marker, 1)[1].split('""",', 1)[0]
+          script = textwrap.dedent(script).replace('\\\\', '\\').replace('%s', '"test"')
+          open('/tmp/verval-automation-check.js', 'w', encoding='utf-8').write(script)
           app = open('app/src/main/assets/app.js', encoding='utf-8').read()
           assert "function armVervalWatchdog()" in app
           assert "state.vervalRecords=[matched]" in app and "renderVervalPage();" in app
           assert "state.vervalMatchState='error'" in app
-          print('Manifest, version, Verval runner, viewport, callback rendering, and watchdog checks OK')
+          print('Manifest, version, generated Verval script, viewport, callback rendering, and watchdog checks OK')
           PY
+          node --check /tmp/verval-automation-check.js
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
