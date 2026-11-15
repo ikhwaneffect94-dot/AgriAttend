@@ -1,4 +1,4 @@
-# AgriAttend Android Ready v1.7.5
+# AgriAttend Android Ready v1.7.6
 
 AgriAttend is an Android companion client for AgriConnect HRIS.
 
@@ -15,6 +15,11 @@ Example target:
 The assignment parser requires a real KDKMP/KDMP/cooperative value or a meaningful assignment field. Generic loading labels such as "Memuat data penugasan" are not accepted as cooperative names.
 
 The official Verval page runs in an internal transparent, non-interactive WebView. Region selection uses Province → Regency/City → Kecamatan before the shared passcode is entered. Non Prioritas is scanned first, followed by other detected categories. The official page's current structure and the account's access rights determine whether individual rows are available.
+
+## v1.7.6 changes
+
+- Add the missing `normalizeRegionName()` helper as a shared alias to `normalizeRegionText()`. This prevents profile hydration and login from failing with a JavaScript `ReferenceError` when placement-region matching runs.
+- Bump the service-worker cache and Android version so installed clients fetch the corrected JavaScript bundle.
 
 ## v1.7.5 changes
 
