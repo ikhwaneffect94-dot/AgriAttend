@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.7.8';
+const CLIENT_VERSION = '1.7.9';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
