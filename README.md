@@ -1,32 +1,26 @@
-# AgriAttend Android Ready v1.6.8
+# AgriAttend Android Ready v1.6.9
 
-AgriAttend is an Android companion client for AgriConnect HRIS. Its main interface remains the bundled local PWA.
+AgriAttend is an Android companion client for AgriConnect HRIS.
 
-## Pantauan Verval — automatic in-app retrieval
+## SIMKOPDES Verval — full category search
 
-The user selects province and regency/city in AgriAttend. The app then runs the official SIMKOPDES Verval page flow in an invisible internal WebView. No SIMKOPDES page or browser UI is shown.
+AgriAttend presents province and regency/city selectors in its own UI. A hidden internal WebView runs the official SIMKOPDES Verval page flow, submits the shared passcode, and reads the official result table. No SIMKOPDES browser/page UI is shown to the user.
 
-The hidden workflow:
-1. Opens the official Verval route with the requested batch parameter.
-2. Detects and selects the official province option.
-3. Waits for and selects the official regency/city option.
-4. Fills the shared Verval passcode in the official page's passcode field.
-5. Submits the official verification form.
-6. Reads visible result table rows and maps them into AgriAttend records.
-7. Consolidates multiple asset rows under the same cooperative and matches the assignment name from AgriConnect.
+Version 1.6.9 expands result retrieval beyond the first visible table:
+- Detect and visit visible tabs, buttons, links, and select options for Batch 1, Batch 2, Batch 3, Batch 4, Prioritas, and Non Prioritas.
+- Collect table rows after each category/filter change instead of stopping after the first non-empty table.
+- Follow visible pagination controls and gather rows from subsequent pages, with a per-category page limit.
+- Preserve category labels on each row and collect coverage metadata.
+- Deduplicate repeated rows, then consolidate rows belonging to the same cooperative before matching the AgriConnect assignment.
+- Display Non Prioritas as its own category in the Verval card; do not relabel it as a numbered batch.
+- If the portal does not expose a category control, report which categories were detected and do not claim complete coverage.
 
-The passcode is not displayed in the AgriAttend UI and is not written to application logs. It is embedded in the APK for automatic submission; anyone able to reverse-engineer the APK may be able to recover it, so rotate the shared passcode if its exposure becomes a concern.
-
-If the portal changes its DOM, the automation returns safe diagnostics about visible dropdowns, input attributes, and buttons. It does not bypass CAPTCHA, account login, denied access, or other server-side access controls. Those conditions are reported as a failure and require an authorized workflow.
-
-## Data presentation
-
-On success, AgriAttend maps the matching cooperative's official table row into its Verval card, including available batch, status, asset count, coordinates, ownership, and surveyor fields. Fields absent from the official result remain blank instead of being fabricated.
+The automation still depends on the live portal DOM and requires a device test. It does not bypass CAPTCHA, account login, or server-side access restrictions. The shared passcode remains embedded in the APK for automatic entry and can be recovered by reverse engineering.
 
 ## AgriConnect
 
-Authentication, employee profile/assignment, timesheet, attendance, correction/backdate requests, shift-change requests, payroll, and personal request status continue to use the authenticated AgriConnect tenant API.
+Authentication, employee profile/assignment, timesheet, attendance, correction/backdate requests, shift-change requests, payroll, and request status use the authenticated AgriConnect tenant API.
 
 ## Build
 
-Open in Android Studio or push the source branch. The GitHub Actions workflow builds the debug APK and uploads the artifact.
+GitHub Actions builds :app:assembleDebug and uploads the debug APK artifact.
