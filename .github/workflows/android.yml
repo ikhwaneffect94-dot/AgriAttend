@@ -3,7 +3,7 @@ name: Build AgriAttend APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, 'fix/**']
     paths:
       - 'AgriAttend-Android-Ready-v*.zip'
       - '.github/workflows/android.yml'
@@ -61,7 +61,7 @@ jobs:
           elif [ -f "settings.gradle" ] && [ -d "app" ]; then
             PROJECT_DIR=.
           else
-            echo "::error::Upload ZIP AgriAttend-Android-Ready-v1.6.1.zip ke root repository."
+            echo "::error::Upload ZIP AgriAttend-Android-Ready-v1.6.2.zip ke root repository."
             exit 1
           fi
           test -f "$PROJECT_DIR/settings.gradle"
@@ -69,6 +69,18 @@ jobs:
           test -f "$PROJECT_DIR/app/src/main/assets/app.js"
           test -f "$PROJECT_DIR/app/src/main/AndroidManifest.xml"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Static source checks
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          node --check app/src/main/assets/app.js
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          ET.parse('app/src/main/AndroidManifest.xml')
+          text = open('app/build.gradle', encoding='utf-8').read()
+          assert "versionCode 21" in text and "versionName '1.6.2'" in text
+          print('Manifest XML and version metadata OK')
+          PY
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
@@ -81,7 +93,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgriAttend-debug-APK-v1.6.1
+          name: AgriAttend-debug-APK-v1.6.2
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
