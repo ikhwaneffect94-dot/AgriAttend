@@ -13,6 +13,8 @@ let payslipRows = [];
 let payslipSelected = null;
 let shiftOptions = [];
 let vervalRegionLoadToken = 0;
+let vervalRequestTimer = null;
+let vervalRequestId = 0;
 let currentGps = null;
 let historyFilter = 'all';
 let toastTimer;
@@ -66,7 +68,7 @@ function loadState(){
       vervalPhase2Rows: Array.isArray(saved.vervalPhase2Rows) ? saved.vervalPhase2Rows : [],
       vervalStatsSource: saved.vervalStatsSource || ''
     };
-  } catch { return {profile:{name:'',employee:''},locations:[],attendance:[],corrections:[],noticeDismissed:false,vervalRecords:[],vervalUpdatedAt:'',vervalAssignment:'',vervalProvince:'',vervalMatchState:'',vervalProvinceStats:null,vervalPhase2Rows:[],vervalStatsSource:''}; }
+  } catch { return {profile:{name:'',employee:''},locations:[],attendance:[],corrections:[],noticeDismissed:false,vervalRecords:[],vervalUpdatedAt:'',vervalAssignment:'',vervalProvince:'',vervalMatchState:'',vervalError:'',vervalProvinceStats:null,vervalPhase2Rows:[],vervalStatsSource:''}; }
 }
 function persist(){ localStorage.setItem(STORE, JSON.stringify(state)); renderAll(); }
 function esc(value){return String(value ?? '').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
@@ -650,6 +652,7 @@ function renderVervalPage(){
 function setVervalStatus(message,isError=false){const el=$('#vervalLiveStatus');if(el){el.textContent=message;el.classList.toggle('verval-error',!!isError);}}
 window.__vervalDirectStatus=function(message){setVervalStatus(String(message||'Mengambil data langsung dari SIMKOPDES…'));};
 window.__vervalDirectResult=function(payload){
+  clearTimeout(vervalRequestTimer);vervalRequestTimer=null;
   const btn=$('#openVervalCheckDialog');
   try{
     const result=typeof payload==='string'?JSON.parse(payload):payload;
@@ -845,6 +848,19 @@ function openVervalRegionDialog(){
   if(provinceId)loadVervalRegencies(provinceId,state.vervalAssignment||district)
     .catch(error=>setVervalRegionLoadStatus(error.message||'Gagal memuat kabupaten/kota.',true));
 }
+function armVervalWatchdog(){
+  clearTimeout(vervalRequestTimer);
+  const requestId=++vervalRequestId;
+  vervalRequestTimer=setTimeout(()=>{
+    if(requestId!==vervalRequestId||state.vervalMatchState!=='checking')return;
+    const message='Pengambilan data Verval berhenti karena melewati batas 70 detik. Tidak ada hasil yang diterima dari portal. Silakan coba lagi; detail proses sebelumnya tidak ditampilkan sebagai data berhasil.';
+    state.vervalRecords=[];state.vervalMatchState='error';state.vervalError=message;
+    state.vervalUpdatedAt=new Date().toISOString();persist();renderVervalPage();
+    setVervalStatus(message,true);
+    const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=false;btn.textContent='✓ Cek Data Verval';}
+    showToast('Pengambilan data Verval melewati batas waktu.');
+  },70000);
+}
 function startPlacementVerval(provinceName,districtName,assignment){
   if(!session){showAuth('Login AgriConnect diperlukan untuk membuka Pantauan Verval.');return;}
   if(!provinceName||!districtName||!assignment){setVervalStatus('Data wilayah atau nama Kopdes penugasan belum lengkap.');return;}
@@ -854,6 +870,7 @@ function startPlacementVerval(provinceName,districtName,assignment){
   state.vervalRecords=[];state.vervalProvinceStats=null;state.vervalPhase2Rows=[];
   state.vervalAssignment=districtName;state.vervalProvince=provinceName;state.vervalMatchState='checking';
   state.vervalUpdatedAt='';state.vervalError='';persist();
+  armVervalWatchdog();
   const dialog=$('#vervalRegionDialog');if(dialog?.open)dialog.close();
   const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=true;btn.textContent='Mengambil data…';}
   setVervalStatus(`Lokasi otomatis dari kartu penugasan: ${provinceName} → ${districtName}. Mengisi passcode dan mencari ${getPlacementDisplayName()}…`);
@@ -873,7 +890,7 @@ function confirmVervalRegionSelection(){
   if(!assignment){setVervalRegionLoadStatus('Nama Kopdes penugasan tidak ditemukan pada profil AgriConnect.',true);return;}
   state.vervalRecords=[];state.vervalProvinceStats=null;state.vervalPhase2Rows=[];
   state.vervalAssignment=districtName;state.vervalProvince=provinceName;state.vervalMatchState='checking';
-  state.vervalUpdatedAt='';persist();
+  state.vervalUpdatedAt='';state.vervalError='';persist();armVervalWatchdog();
   const dialog=$('#vervalRegionDialog');if(dialog?.open)dialog.close();
   const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=true;btn.textContent='Mengambil data…';}
   setVervalStatus(`Menarik data Verval: ${provinceName} → ${districtName}. Mengisi passcode secara otomatis dan mencari ${getPlacementDisplayName()}…`);
