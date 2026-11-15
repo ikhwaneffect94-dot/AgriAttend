@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.7.7';
+const CLIENT_VERSION = '1.7.8';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
@@ -720,7 +720,7 @@ function findPlacementVervalMatch(records){
 function getVervalCategoryLabel(record){
   const values=[record?.batch,record?.priorityType,record?.category,...(Array.isArray(record?.categories)?record.categories:[]),record?.sourceText]
     .filter(value=>value!==null&&value!==undefined&&String(value).trim()!=='')
-    .map(value=>String(value).trim());
+    .map(value=>cleanVervalDisplayText(value,600)).filter(Boolean);
   const text=values.join(' | ');
   if(/non[\s_-]*prioritas/i.test(text))return 'Non Prioritas';
   const batch=text.match(/\bbatch\s*[-:#]?\s*([1-4])\b/i);
@@ -730,7 +730,7 @@ function getVervalCategoryLabel(record){
 }
 function formatVervalNumber(value){
   if(value===null||value===undefined||value==='')return '—';
-  const n=Number(value);return Number.isFinite(n)?new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(n):String(value);
+  const n=Number(value);return Number.isFinite(n)?new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(n):(cleanVervalDisplayText(value,100)||'—');
 }
 function renderVervalRegionalStats(){
   const panel=$('#vervalRegionalStatsPanel');if(!panel)return;
@@ -757,6 +757,24 @@ function renderVervalRegionalStats(){
   }
   const source=$('#vervalStatsSource');if(source)source.textContent=state.vervalStatsSource||'API statistik SIMKOPDES';
 }
+function isVervalDiagnosticText(value){
+  const text=String(value??'').replace(/\s+/g,' ').trim();
+  return /diagnostics?|diagnostik|g-recaptcha-response|recaptcha|requestedprovince|requestedregency|requestedsubdistrict|assignmentsearchname|categorycontrols|https?:\/\/simkopdes\.go\.id\/pers\/asset\/verval|\b(?:selects?|inputs?|buttons?)\s*[:=]/i.test(text);
+}
+function cleanVervalDisplayText(value,maxLength=180){
+  const text=String(value??'').replace(/\s+/g,' ').trim();
+  if(!text||text.length>maxLength||isVervalDiagnosticText(text))return '';
+  return text;
+}
+function parseVervalCoordinate(value,min,max){
+  if(value===null||value===undefined||value==='')return null;
+  const number=Number(value);
+  return Number.isFinite(number)&&number>=min&&number<=max?number:null;
+}
+function isValidVervalCoordinates(latitude,longitude){
+  return latitude!==null&&longitude!==null&&Number.isFinite(Number(latitude))&&Number.isFinite(Number(longitude))
+    &&Number(latitude)>=-90&&Number(latitude)<=90&&Number(longitude)>=-180&&Number(longitude)<=180;
+}
 function renderVervalPage(){
   const placement=getPlacementRegion();
   const nameEl=$('#vervalPlacementName');if(nameEl)nameEl.textContent=getPlacementDisplayName();
@@ -764,7 +782,17 @@ function renderVervalPage(){
   const regionEl=$('#vervalPlacementRegion');if(regionEl)regionEl.textContent=regionParts.join(' · ')||'Lokasi penugasan belum terbaca dari AgriConnect';
   const found=findPlacementVervalMatch(state.vervalRecords),matched=found&&!found.ambiguous?found:null;
   const statusEl=$('#vervalPlacementStatus'),batchEl=$('#vervalPlacementBatch'),resultPanel=$('#vervalPlacementResult');
-  if(statusEl){if(matched)statusEl.textContent=matched.resultStatus||matched.assetStatus||'Data koperasi ditemukan; status aset belum tersedia';else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';else if(state.vervalMatchState==='checking')statusEl.textContent='Sedang menarik data resmi SIMKOPDES…';else if(state.vervalMatchState==='error')statusEl.textContent=getFriendlyVervalError({message:state.vervalError||'Pengambilan data Verval gagal'});else statusEl.textContent='Belum diperiksa';}
+  if(statusEl){
+    if(matched){
+      const assetStatus=cleanVervalDisplayText(matched.assetStatus,160);
+      const verificationStatus=cleanVervalDisplayText(matched.resultStatus,160);
+      statusEl.textContent=assetStatus||verificationStatus||'Data koperasi ditemukan; status aset belum tersedia';
+    }else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';
+    else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';
+    else if(state.vervalMatchState==='checking')statusEl.textContent='Sedang menarik data resmi SIMKOPDES…';
+    else if(state.vervalMatchState==='error')statusEl.textContent=getFriendlyVervalError({message:state.vervalError||'Pengambilan data Verval gagal'});
+    else statusEl.textContent='Belum diperiksa';
+  }
   if(batchEl){
     const category=matched?getVervalCategoryLabel(matched):'';
     const label=matched?`Masuk: ${category}`:'';
@@ -776,31 +804,36 @@ function renderVervalPage(){
     resultPanel.hidden=!matched;
     if(matched){
       const official=$('#vervalOfficialName'),exam=$('#vervalOfficialStatus'),coords=$('#vervalOfficialCoordinates'),map=$('#vervalOfficialMap');
-      if(official)official.textContent=matched.name||'Belum tersedia';if(exam)exam.textContent=matched.resultStatus||matched.assetStatus||'Belum tersedia';
+      if(official)official.textContent=cleanVervalDisplayText(matched.name,120)||'Belum tersedia';if(exam)exam.textContent=cleanVervalDisplayText(matched.assetStatus,160)||cleanVervalDisplayText(matched.resultStatus,160)||'Belum tersedia';
       const assetCount=$('#vervalOfficialAssetCount');if(assetCount)assetCount.textContent=formatVervalNumber(matched.assetCount);
-      const hasCoords=Number.isFinite(Number(matched.latitude))&&Number.isFinite(Number(matched.longitude))&&matched.latitude!==null&&matched.longitude!==null;
+      const hasCoords=isValidVervalCoordinates(matched.latitude,matched.longitude);
       if(coords)coords.textContent=hasCoords?`${Number(matched.latitude).toFixed(6)}, ${Number(matched.longitude).toFixed(6)}`:'Koordinat tidak tersedia';
       const rawMap=String(matched.mapUrl||''),safeMap=/^https:\/\/(?:www\.google\.com\/maps|maps\.google\.com|maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(rawMap)?rawMap:(hasCoords?`https://www.google.com/maps?q=${matched.latitude},${matched.longitude}`:'');
       if(map){map.hidden=!safeMap;map.href=safeMap||'#';}
       const ownership=$('#vervalOfficialOwnership'),surveyor=$('#vervalOfficialSurveyor');
-      if(ownership)ownership.textContent=matched.ownership||'Belum tersedia';
-      if(surveyor)surveyor.textContent=matched.surveyor||'—';
+      if(ownership)ownership.textContent=cleanVervalDisplayText(matched.ownership,100)||'Belum tersedia';
+      if(surveyor)surveyor.textContent=cleanVervalDisplayText(matched.surveyor,100)||'—';
     }
   }
   const updated=$('#vervalUpdatedAt');if(updated)updated.textContent=state.vervalUpdatedAt?`Diperiksa ${fmtDate(state.vervalUpdatedAt,{day:'2-digit',month:'short',year:'numeric'})} pukul ${fmtTime(state.vervalUpdatedAt)}`:'Belum ada pemeriksaan';
   const preview=$('#vervalTargetPreview');if(preview)preview.textContent=getPlacementDisplayName();
   renderVervalRegionalStats();
 }
-function setVervalStatus(message,isError=false){const el=$('#vervalLiveStatus');if(el){el.textContent=message;el.classList.toggle('verval-error',!!isError);}}
+function setVervalStatus(message,isError=false){const el=$('#vervalLiveStatus');if(el){const raw=String(message??'').replace(/\\s+/g,' ').trim();const safe=(isVervalDiagnosticText(raw)||raw.length>260)?getFriendlyVervalError({message:raw}):(cleanVervalDisplayText(raw,260)||'Proses Verval SIMKOPDES.');el.textContent=safe;el.classList.toggle('verval-error',!!isError);}}
 window.__vervalDirectStatus=function(message){setVervalStatus(String(message||'Mengambil data langsung dari SIMKOPDES…'));};
 function getFriendlyVervalError(result){
   const raw=String(result?.message||'Data Verval tidak berhasil dibaca.').replace(/\s+/g,' ').trim();
-  if(/diagnostik:|teks halaman:|dropdown:|halaman:\s*https?:/i.test(raw))return 'Portal SIMKOPDES belum berhasil memuat daftar wilayah atau data aset. Silakan ulangi pemeriksaan.';
-  if(/kecamatan.*(tidak ditemukan|belum tersedia)|pilihan kecamatan/i.test(raw))return 'Kecamatan penugasan belum muncul pada portal SIMKOPDES. Periksa kembali pilihan provinsi dan kabupaten, lalu coba lagi.';
-  if(/kabupaten|kota.*(tidak terdeteksi|tidak ditemukan)|regency/i.test(raw))return 'Pilihan kabupaten/kota belum berhasil dimuat dari portal SIMKOPDES. Periksa kembali wilayah penugasan.';
-  if(/passcode|tombol verifikasi|form verifikasi/i.test(raw))return 'Form verifikasi SIMKOPDES belum siap. Data aset belum berhasil ditarik.';
-  if(/403|forbidden|unauthorized|tidak memiliki akses|akses ditolak/i.test(raw))return 'Portal SIMKOPDES menolak akses untuk sesi ini. Periksa hak akses akun dan coba masuk kembali.';
-  return raw.slice(0,180)||'Portal SIMKOPDES belum mengembalikan data aset. Silakan coba lagi.';
+  if(/kecamatan.*(tidak ditemukan|belum tersedia)|pilihan kecamatan/i.test(raw))
+    return 'Pilihan Kecamatan penugasan belum tersedia di portal SIMKOPDES. Data aset belum berhasil ditarik; periksa wilayah lalu coba lagi.';
+  if(/kabupaten|kota.*(tidak terdeteksi|tidak ditemukan)|regency/i.test(raw))
+    return 'Pilihan kabupaten/kota belum berhasil dimuat dari portal SIMKOPDES. Periksa wilayah penugasan lalu coba lagi.';
+  if(/403|forbidden|unauthorized|tidak memiliki akses|akses ditolak/i.test(raw))
+    return 'Portal SIMKOPDES menolak akses untuk sesi ini. Periksa hak akses akun lalu coba lagi.';
+  if(/passcode|tombol verifikasi|form verifikasi/i.test(raw))
+    return 'Form verifikasi SIMKOPDES belum siap. Data aset belum berhasil ditarik.';
+  if(isVervalDiagnosticText(raw)||raw.length>220)
+    return 'Portal SIMKOPDES mengembalikan informasi teknis, bukan data aset. Periksa pilihan wilayah lalu ulangi pemeriksaan.';
+  return cleanVervalDisplayText(raw,180)||'Portal SIMKOPDES belum mengembalikan data aset. Silakan coba lagi.';
 }
 window.__vervalDirectResult=function(payload){
   clearTimeout(vervalRequestTimer);vervalRequestTimer=null;
@@ -819,15 +852,15 @@ window.__vervalDirectResult=function(payload){
       return;
     }
     const sourceRows=(Array.isArray(result.records)?result.records:[]).map(x=>({
-      name:String(x.name||'').trim(),batch:x.batch==null?'':String(x.batch),
-      priorityType:String(x.priorityType||''),category:String(x.category||''),
-      cooperativeId:x.cooperativeId==null?'':String(x.cooperativeId),
-      assetCount:x.assetCount==null||x.assetCount===''||!Number.isFinite(Number(x.assetCount))?null:Number(x.assetCount),
-      resultStatus:String(x.resultStatus||'').trim(),
-      latitude:x.latitude==null||x.latitude===''?null:Number(x.latitude),
-      longitude:x.longitude==null||x.longitude===''?null:Number(x.longitude),
-      mapUrl:String(x.mapUrl||''),ownership:String(x.ownership||''),assetStatus:String(x.assetStatus||''),
-      surveyor:String(x.surveyor||''),sourceText:String(x.sourceText||''),
+      name:cleanVervalDisplayText(x.name,120),batch:cleanVervalDisplayText(x.batch,60),
+      priorityType:cleanVervalDisplayText(x.priorityType,60),category:cleanVervalDisplayText(x.category,80),
+      cooperativeId:cleanVervalDisplayText(x.cooperativeId,80),
+      assetCount:x.assetCount==null||x.assetCount===''||!Number.isFinite(Number(x.assetCount))||Number(x.assetCount)<0?null:Number(x.assetCount),
+      resultStatus:cleanVervalDisplayText(x.resultStatus,160),
+      latitude:parseVervalCoordinate(x.latitude,-90,90),
+      longitude:parseVervalCoordinate(x.longitude,-180,180),
+      mapUrl:cleanVervalDisplayText(x.mapUrl,500),ownership:cleanVervalDisplayText(x.ownership,100),assetStatus:cleanVervalDisplayText(x.assetStatus,160),
+      surveyor:cleanVervalDisplayText(x.surveyor,100),sourceText:cleanVervalDisplayText(x.sourceText,600),
       rawFields:x.rawFields&&typeof x.rawFields==='object'?x.rawFields:{}
     })).filter(x=>x.name);
     const rowDedupe=new Map();
@@ -907,7 +940,7 @@ window.__vervalDirectResult=function(payload){
     setVervalStatus(`Data ditemukan: ${matched.name} (${formatVervalNumber(matched.assetCount||1)} bidang/baris). Kategori: ${categoryList||matched.priorityType||matched.batch||'tidak teridentifikasi'}. Status: ${matched.resultStatus}. ${coverageNote}${paginationNote} ${note}`);
     showToast(coverageComplete?'Data Verval berhasil diperbarui untuk seluruh kategori.':'Data ditemukan, tetapi cakupan kategori perlu diperiksa.');
   }catch(e){
-    const message=e.message||'Pengambilan data SIMKOPDES gagal.';
+    const message=getFriendlyVervalError({message:e.message||'Pengambilan data SIMKOPDES gagal.'});
     if(state.vervalMatchState!=='not_found'&&state.vervalMatchState!=='ambiguous'){
       state.vervalRecords=[];state.vervalMatchState='error';state.vervalError=message;persist();
     }
