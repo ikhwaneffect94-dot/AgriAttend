@@ -13,6 +13,7 @@ let payslipRows = [];
 let payslipSelected = null;
 let shiftOptions = [];
 let vervalRegionLoadToken = 0;
+let vervalSubdistrictLoadToken = 0;
 let vervalRequestTimer = null;
 let vervalRequestId = 0;
 let currentGps = null;
@@ -882,7 +883,7 @@ function populateVervalProvinces(selectedProvince=''){
   select.value=detected?detected[0]:'';
   return select.value;
 }
-async function loadVervalRegencies(provinceId,preferredDistrict=''){
+async function loadVervalRegencies(provinceId,preferredRegency=''){
   const requestToken=++vervalRegionLoadToken;
   const select=$('#vervalDistrictSelect'),confirm=$('#confirmVervalCheck');
   if(!select)return;
@@ -891,8 +892,7 @@ async function loadVervalRegencies(provinceId,preferredDistrict=''){
   setVervalRegionLoadStatus('Memuat daftar kabupaten/kota…');
   if(!provinceId){select.innerHTML='<option value="">Pilih provinsi terlebih dahulu</option>';return;}
   let rows=[],fallback=false;
-  const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),12000);
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
   try{
     const response=await fetch(`https://www.emsifa.com/api-wilayah-indonesia/v2/regencies/${encodeURIComponent(provinceId)}.json`,{headers:{Accept:'application/json'},cache:'force-cache',signal:controller.signal});
     if(!response.ok)throw new Error(`HTTP ${response.status}`);
@@ -902,42 +902,74 @@ async function loadVervalRegencies(provinceId,preferredDistrict=''){
   finally{clearTimeout(timeout);}
   if(requestToken!==vervalRegionLoadToken)return;
   if(!rows.length)rows=(VERVAL_FALLBACK_REGENCIES[provinceId]||[]).map(name=>({id:'',name}));
-  const placement=getPlacementRegion();
-  const provinceName=VERVAL_PROVINCES.find(x=>x[0]===provinceId)?.[1]||'';
-  const samePlacementProvince=normalizeRegionName(placement.province)===normalizeRegionName(provinceName);
+  const placement=getPlacementRegion(),provinceName=VERVAL_PROVINCES.find(x=>x[0]===provinceId)?.[1]||'';
+  const sameProvince=normalizeRegionName(placement.province)===normalizeRegionName(provinceName);
   const suggested=placement.kabupaten;
-  if(samePlacementProvince&&suggested&&!rows.some(x=>normalizeRegionName(x.name)===normalizeRegionName(suggested))){
+  if(sameProvince&&suggested&&!rows.some(x=>normalizeRegionName(x.name)===normalizeRegionName(suggested))){
     const clean=suggested.replace(/^(kabupaten|kab\.?|kota)\s*/i,'');
     rows.unshift({id:'',name:/^kota\b/i.test(suggested)?`Kota ${clean}`:`Kabupaten ${clean}`});
   }
   rows.sort((a,b)=>a.name.localeCompare(b.name,'id'));
   if(!rows.length){select.innerHTML='<option value="">Daftar kabupaten/kota tidak tersedia</option>';setVervalRegionLoadStatus('Daftar kabupaten/kota belum tersedia. Periksa koneksi internet.',true);return;}
-  select.innerHTML='<option value="">Pilih kabupaten/kota</option>'+rows.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');
-  const districtTarget=preferredDistrict||(samePlacementProvince?suggested:'');
-  const preferred=districtTarget?rows.find(x=>normalizeRegionName(x.name)===normalizeRegionName(districtTarget)):null;
+  select.innerHTML='<option value="">Pilih kabupaten/kota</option>'+rows.map(x=>`<option value="${esc(x.name)}" data-id="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+  const target=preferredRegency||(sameProvince?suggested:'');
+  const preferred=target?rows.find(x=>normalizeRegionName(x.name)===normalizeRegionName(target)):null;
+  select.value=preferred?preferred.name:'';
+  select.disabled=false;
+  setVervalRegionLoadStatus(`${rows.length} kabupaten/kota tersedia.${fallback?' Memakai daftar cadangan karena layanan wilayah tidak merespons.':''}${preferred?' Kabupaten penugasan dipilih otomatis.':''}`);
+  const regencyId=preferred?.id||select.selectedOptions?.[0]?.dataset?.id||'';
+  await loadVervalSubdistricts(regencyId,placement.kecamatan);
+}
+async function loadVervalSubdistricts(regencyId,preferredSubdistrict=''){
+  const token=++vervalSubdistrictLoadToken,select=$('#vervalSubdistrictSelect'),confirm=$('#confirmVervalCheck');
+  if(!select)return;
+  select.disabled=true;if(confirm)confirm.disabled=true;
+  select.innerHTML='<option value="">Memuat kecamatan…</option>';
+  let rows=[],fallback=false;
+  if(regencyId){
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
+    try{
+      const response=await fetch(`https://www.emsifa.com/api-wilayah-indonesia/v2/districts/${encodeURIComponent(regencyId)}.json`,{headers:{Accept:'application/json'},cache:'force-cache',signal:controller.signal});
+      if(!response.ok)throw new Error(`HTTP ${response.status}`);
+      const json=await response.json(),list=Array.isArray(json)?json:(Array.isArray(json?.data)?json.data:[]);
+      rows=list.map(x=>({id:String(x.id||x.code||''),name:String(x.name||x.nama||'').trim()})).filter(x=>x.name);
+    }catch(_){fallback=true;}
+    finally{clearTimeout(timeout);}
+  }
+  if(token!==vervalSubdistrictLoadToken)return;
+  const suggested=String(preferredSubdistrict||'').replace(/^kecamatan\s*/i,'').trim();
+  if(suggested&&!rows.some(x=>normalizeRegionName(x.name)===normalizeRegionName(suggested)))rows.unshift({id:'',name:suggested});
+  rows.sort((a,b)=>a.name.localeCompare(b.name,'id'));
+  if(!rows.length){
+    select.innerHTML='<option value="">Daftar kecamatan tidak tersedia</option>';
+    setVervalRegionLoadStatus('Daftar kecamatan belum berhasil dimuat. Periksa koneksi atau data penugasan AgriConnect.',true);return;
+  }
+  select.innerHTML='<option value="">Pilih kecamatan</option>'+rows.map(x=>`<option value="${esc(x.name)}" data-id="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+  const preferred=suggested?rows.find(x=>normalizeRegionName(x.name)===normalizeRegionName(suggested)):null;
   select.value=preferred?preferred.name:'';
   select.disabled=false;
   if(confirm)confirm.disabled=!select.value;
-  setVervalRegionLoadStatus(`${rows.length} kabupaten/kota tersedia.${fallback?' Memakai daftar cadangan karena layanan wilayah tidak merespons.':''}${preferred?' Wilayah penugasan dipilih otomatis.':''}`);
+  setVervalRegionLoadStatus(`${rows.length} kecamatan tersedia.${fallback?' Pilihan kecamatan dari data penugasan dipakai bila tersedia.':''}${preferred?' Kecamatan penugasan dipilih otomatis.':''}`);
 }
 function openVervalRegionDialog(){
   if(!session){showAuth('Login AgriConnect diperlukan untuk membuka Pantauan Verval.');return;}
   const placement=getPlacementRegion();
-  const province=String(placement.province||'').trim();
-  const district=String(placement.kabupaten||'').trim();
-  const assignment=getPlacementKopdes();
-  if(province&&district&&assignment){startPlacementVerval(province,district,assignment);return;}
-  // Manual fallback is only used if the AgriConnect placement card lacks region fields.
-  const districtSelect=$('#vervalDistrictSelect'),dialog=$('#vervalRegionDialog');
-  vervalRegionLoadToken++;
+  const province=String(placement.province||'').trim(),regency=String(placement.kabupaten||'').trim();
+  const subdistrict=String(placement.kecamatan||'').trim(),assignment=getPlacementKopdes();
+  const searchName=getPlacementKopdesSearchName();
+  if(province&&regency&&subdistrict&&assignment&&searchName){
+    startPlacementVerval(province,regency,subdistrict,assignment,searchName);return;
+  }
+  const dialog=$('#vervalRegionDialog'),regencySelect=$('#vervalDistrictSelect'),subdistrictSelect=$('#vervalSubdistrictSelect');
   const provinceId=populateVervalProvinces(state.vervalProvince||province);
-  districtSelect.disabled=true;
-  districtSelect.innerHTML=provinceId?'<option value="">Memuat kabupaten/kota…</option>':'<option value="">Pilih provinsi terlebih dahulu</option>';
+  regencySelect.disabled=true;
+  regencySelect.innerHTML=provinceId?'<option value="">Memuat kabupaten/kota…</option>':'<option value="">Pilih provinsi terlebih dahulu</option>';
+  subdistrictSelect.disabled=true;subdistrictSelect.innerHTML='<option value="">Pilih kabupaten/kota terlebih dahulu</option>';
   $('#confirmVervalCheck').disabled=true;
-  const preview=$('#vervalTargetPreview');if(preview)preview.textContent=getPlacementDisplayName();
-  setVervalRegionLoadStatus('Lokasi penugasan belum lengkap pada profil AgriConnect. Silakan pilih wilayah secara manual.');
+  const preview=$('#vervalTargetPreview');if(preview)preview.textContent=searchName||getPlacementDisplayName();
+  setVervalRegionLoadStatus('Wilayah belum lengkap pada profil AgriConnect. Pilih kabupaten/kota dan kecamatan untuk melanjutkan.');
   if(dialog&&!dialog.open)dialog.showModal();
-  if(provinceId)loadVervalRegencies(provinceId,state.vervalAssignment||district)
+  if(provinceId)loadVervalRegencies(provinceId,regency||state.vervalAssignment)
     .catch(error=>setVervalRegionLoadStatus(error.message||'Gagal memuat kabupaten/kota.',true));
 }
 function armVervalWatchdog(){
