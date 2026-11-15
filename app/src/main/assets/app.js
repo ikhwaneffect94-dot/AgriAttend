@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.7.6';
+const CLIENT_VERSION = '1.7.7';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
@@ -764,7 +764,7 @@ function renderVervalPage(){
   const regionEl=$('#vervalPlacementRegion');if(regionEl)regionEl.textContent=regionParts.join(' · ')||'Lokasi penugasan belum terbaca dari AgriConnect';
   const found=findPlacementVervalMatch(state.vervalRecords),matched=found&&!found.ambiguous?found:null;
   const statusEl=$('#vervalPlacementStatus'),batchEl=$('#vervalPlacementBatch'),resultPanel=$('#vervalPlacementResult');
-  if(statusEl){if(matched)statusEl.textContent=matched.resultStatus||matched.assetStatus||'Data koperasi ditemukan; status aset belum tersedia';else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';else if(state.vervalMatchState==='checking')statusEl.textContent='Sedang menarik data resmi SIMKOPDES…';else if(state.vervalMatchState==='error')statusEl.textContent=state.vervalError||'Pengambilan data Verval gagal';else statusEl.textContent='Belum diperiksa';}
+  if(statusEl){if(matched)statusEl.textContent=matched.resultStatus||matched.assetStatus||'Data koperasi ditemukan; status aset belum tersedia';else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';else if(state.vervalMatchState==='checking')statusEl.textContent='Sedang menarik data resmi SIMKOPDES…';else if(state.vervalMatchState==='error')statusEl.textContent=getFriendlyVervalError({message:state.vervalError||'Pengambilan data Verval gagal'});else statusEl.textContent='Belum diperiksa';}
   if(batchEl){
     const category=matched?getVervalCategoryLabel(matched):'';
     const label=matched?`Masuk: ${category}`:'';
@@ -795,6 +795,7 @@ function setVervalStatus(message,isError=false){const el=$('#vervalLiveStatus');
 window.__vervalDirectStatus=function(message){setVervalStatus(String(message||'Mengambil data langsung dari SIMKOPDES…'));};
 function getFriendlyVervalError(result){
   const raw=String(result?.message||'Data Verval tidak berhasil dibaca.').replace(/\\s+/g,' ').trim();
+  if(/diagnostik:|teks halaman:|dropdown:|halaman:\\s*https?:/i.test(raw))return 'Portal SIMKOPDES belum berhasil memuat daftar wilayah atau data aset. Silakan ulangi pemeriksaan.';
   if(/kecamatan.*(tidak ditemukan|belum tersedia)|pilihan kecamatan/i.test(raw))return 'Kecamatan penugasan belum muncul pada portal SIMKOPDES. Periksa kembali pilihan provinsi dan kabupaten, lalu coba lagi.';
   if(/kabupaten|kota.*(tidak terdeteksi|tidak ditemukan)|regency/i.test(raw))return 'Pilihan kabupaten/kota belum berhasil dimuat dari portal SIMKOPDES. Periksa kembali wilayah penugasan.';
   if(/passcode|tombol verifikasi|form verifikasi/i.test(raw))return 'Form verifikasi SIMKOPDES belum siap. Data aset belum berhasil ditarik.';
