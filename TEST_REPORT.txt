@@ -1,44 +1,24 @@
-AgriAttend v1.6.6 test report
+AgriAttend v1.6.7 test report
 
-Passed:
-- JavaScript syntax check: app.js and sw.js (Node.js)
-- AndroidManifest.xml XML parse
-- HTML IDs are unique (168 IDs checked)
-- Required Verval UI elements are present (8 elements checked)
-- GitHub Actions workflow parses as one root workflow with keys: name, on, permissions, jobs
-- Version metadata is consistent: versionName 1.6.3, versionCode 25
-- SIMKOPDES direct client contains the four intended API paths:
-  * /cooperative-assets/get-all
-  * /statistics/asset-verification-validation
-  * /statistics/national/phase-2
-  * /cooperative-assets/by-regional-facilitator-id/{fid}
-- SIMKOPDES direct client does not create/use WebView and the shared portal passcode is not embedded
-- SimkopdesPublicApi.java syntax/type check completed with minimal Android Base64 and org.json interface stubs (not a substitute for the Android Gradle build)
-
-Included integration:
-- Fetch public cooperative asset records and filter by selected province/district, assignment-derived subdistrict hint, and normalized Kopdes name.
-- Consolidate multiple asset records for the same cooperative into one Kopdes result and expose an asset count.
-- Fetch aggregate verification/construction statistics per province from /statistics/asset-verification-validation.
-- Fetch phase-two aggregate province x Satgas data from /statistics/national/phase-2.
-- Discover the AES secret/IV from the `/pers/dashboard` JavaScript chunk list using the public extractor's `.C)(` call pattern.
-- Validate the dynamic cipher first against `/cooperatives/get-all-nested` and its `grouped[]` structure before fetching the asset tree.
-- Derive SHA-256(secret), decrypt AES-256-CBC without provider-managed padding, and validate/remove PKCS7 explicitly.
-- Keep the earlier uploaded-bundle key as a last fallback and retry API GETs up to four times with short backoff.
-- Pass an authorized saved SIMKOPDES API Bearer token into the initial cipher-validation, statistics, and public asset requests; enforce API-host-only token transmission.
-- Do not call `/statistics/national/phase-2`; the current server responds HTTP 403 and this endpoint is not part of the public extractor's confirmed bulk-data routes.
-- Fetch `/cooperative-assets/get-all` before optional province statistics, so an optional 403 cannot block individual asset data.
-- Report HTTP 403 on required routes as an API access denial with the exact endpoint path, not as a cipher/decryption failure.
-- Prefill Verval province/district from AgriConnect placement; retain the last confirmed selection, keep manual editing available, and bound the region lookup to 12 seconds.
-- Provide Kalimantan Tengah and Kalimantan Selatan fallback district lists when the public region-list service is unavailable.
-- Preserve per-endpoint failure notes so one optional statistics endpoint can fail without hiding the other successfully fetched data.
-- Optional account-scoped facilitator asset lookup uses the user's own authorized Bearer token and regional-facilitator ID, stored with Android Keystore. The shared Verval page passcode is not an API token.
-
-Not verified in this environment:
-- Live SIMKOPDES HTTP access, current key discovery, API payload decryption, and matching against a real assignment. These require testing on an authorized Android device/network.
-- Protected-page Batch 1–4 and non-priority fields are not exposed by the documented public API responses used here. They are not inferred from asset status or aggregate construction statistics.
+Source-level changes:
+- Replaced the active Verval button flow with the official SIMKOPDES Verval route embedded in a dedicated Android WebView activity.
+- Added the route: https://simkopdes.go.id/pers/asset/verval?batch_verification=1%2C2%2C3%2C4
+- Official portal now owns province selection, regency/city selection, passcode validation, and result-table rendering.
+- Enabled JavaScript, DOM storage, cookies, and third-party cookies for the official portal's web workflow.
+- Added in-app Back and Reload controls.
+- Removed the old duplicate province/regency dialog and Bearer-token form from the active UI.
+- The passcode is entered on the official site and is not stored, logged, prefilled, or transmitted as an API token by AgriAttend.
+- Cleared stale direct-API Verval summary data when opening the official portal, to avoid displaying failed/partial public data as a protected Verval result.
+- App version: 1.6.7; Android versionCode 26.
 
 Build verification:
-- GitHub Actions run `43680394178` completed successfully for commit `e0d172220278ef865d070600fecfab878dd68143`.
-- Static source checks, Android Gradle build, APK output verification, and artifact upload all passed.
+- Pending GitHub Actions run for the 1.6.7 branch.
 
-The main app shell keeps its WebView only to render the bundled local AgriAttend UI. SIMKOPDES retrieval itself is performed by native HTTPS API calls and does not open the SIMKOPDES website in any WebView.
+Not verified yet:
+- Live SIMKOPDES route navigation from the Android WebView.
+- Whether the current official route accepts WebView access on the target device/network.
+- Passcode acceptance and full table display after user submission.
+- Parsing official table rows back into the compact AgriAttend summary card; this is intentionally not guessed until a successful result page can be inspected.
+
+Important:
+- APK compilation does not prove passcode validation or live data retrieval. User-device testing is still required.
