@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.7.3';
+const CLIENT_VERSION = '1.7.4';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
@@ -985,41 +985,35 @@ function armVervalWatchdog(){
     showToast('Pengambilan data Verval melewati batas waktu.');
   },70000);
 }
-function startPlacementVerval(provinceName,districtName,assignment){
+function startPlacementVerval(provinceName,regencyName,subdistrictName,assignment,searchName){
   if(!session){showAuth('Login AgriConnect diperlukan untuk membuka Pantauan Verval.');return;}
-  if(!provinceName||!districtName||!assignment){setVervalStatus('Data wilayah atau nama Kopdes penugasan belum lengkap.');return;}
+  if(!provinceName||!regencyName||!subdistrictName||!assignment||!searchName){
+    setVervalStatus('Provinsi, kabupaten, kecamatan, atau nama koperasi penugasan belum terbaca lengkap.');return;
+  }
   if(!window.AndroidBridge||typeof AndroidBridge.startSimkopdesVervalAutomation!=='function'){
     setVervalStatus('Mesin pengambil data Verval internal tidak tersedia pada versi ini.');return;
   }
   state.vervalRecords=[];state.vervalProvinceStats=null;state.vervalPhase2Rows=[];
-  state.vervalAssignment=districtName;state.vervalProvince=provinceName;state.vervalMatchState='checking';
-  state.vervalUpdatedAt='';state.vervalError='';persist();
-  armVervalWatchdog();
+  state.vervalAssignment=`${regencyName} · ${subdistrictName}`;state.vervalProvince=provinceName;state.vervalMatchState='checking';
+  state.vervalUpdatedAt='';state.vervalError='';persist();armVervalWatchdog();
   const dialog=$('#vervalRegionDialog');if(dialog?.open)dialog.close();
   const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=true;btn.textContent='Mengambil data…';}
-  setVervalStatus(`Lokasi otomatis dari kartu penugasan: ${provinceName} → ${districtName}. Mengisi passcode dan mencari ${getPlacementDisplayName()}…`);
-  try{AndroidBridge.startSimkopdesVervalAutomation(provinceName,districtName,assignment);}
+  setVervalStatus(`Lokasi penugasan: ${provinceName} → ${regencyName} → ${subdistrictName}. Pencarian: ${searchName}.`);
+  try{AndroidBridge.startSimkopdesVervalAutomation(provinceName,regencyName,subdistrictName,assignment,searchName);}
   catch(error){window.__vervalDirectResult({success:false,message:error.message||'Mesin Verval internal gagal dijalankan.',records:[]});}
 }
 function confirmVervalRegionSelection(){
-  const provinceSelect=$('#vervalProvinceSelect'),districtSelect=$('#vervalDistrictSelect');
+  const provinceSelect=$('#vervalProvinceSelect'),regencySelect=$('#vervalDistrictSelect'),subdistrictSelect=$('#vervalSubdistrictSelect');
   const provinceName=provinceSelect?.selectedOptions?.[0]?.textContent?.trim()||'';
-  const districtName=districtSelect?.value?.trim()||'';
-  if(!provinceName||!districtName){setVervalRegionLoadStatus('Pilih provinsi dan kabupaten/kota terlebih dahulu.',true);return;}
+  const regencyName=regencySelect?.value?.trim()||'',subdistrictName=subdistrictSelect?.value?.trim()||'';
+  if(!provinceName||!regencyName||!subdistrictName){setVervalRegionLoadStatus('Pilih provinsi, kabupaten/kota, dan kecamatan terlebih dahulu.',true);return;}
   if(!session){setVervalRegionLoadStatus('Login AgriConnect terlebih dahulu.',true);return;}
   if(!window.AndroidBridge||typeof AndroidBridge.startSimkopdesVervalAutomation!=='function'){
     setVervalRegionLoadStatus('Mesin pengambil data Verval internal tidak tersedia pada versi ini.',true);return;
   }
-  const assignment=getPlacementKopdes();
-  if(!assignment){setVervalRegionLoadStatus('Nama Kopdes penugasan tidak ditemukan pada profil AgriConnect.',true);return;}
-  state.vervalRecords=[];state.vervalProvinceStats=null;state.vervalPhase2Rows=[];
-  state.vervalAssignment=districtName;state.vervalProvince=provinceName;state.vervalMatchState='checking';
-  state.vervalUpdatedAt='';state.vervalError='';persist();armVervalWatchdog();
-  const dialog=$('#vervalRegionDialog');if(dialog?.open)dialog.close();
-  const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=true;btn.textContent='Mengambil data…';}
-  setVervalStatus(`Menarik data Verval: ${provinceName} → ${districtName}. Mengisi passcode secara otomatis dan mencari ${getPlacementDisplayName()}…`);
-  try{AndroidBridge.startSimkopdesVervalAutomation(provinceName,districtName,assignment);}
-  catch(error){window.__vervalDirectResult({success:false,message:error.message||'Mesin Verval internal gagal dijalankan.',records:[]});}
+  const assignment=getPlacementKopdes(),searchName=getPlacementKopdesSearchName();
+  if(!assignment||!searchName){setVervalRegionLoadStatus('Nama koperasi penugasan tidak ditemukan pada profil AgriConnect.',true);return;}
+  startPlacementVerval(provinceName,regencyName,subdistrictName,assignment,searchName);
 }
 function refreshVervalData(){openVervalRegionDialog();}
 
@@ -1295,7 +1289,12 @@ function bindEvents(){
   $('#openVervalCheckDialog').addEventListener('click',refreshVervalData);
   $('#closeVervalRegionDialog').addEventListener('click',()=>$('#vervalRegionDialog').close());
   $('#vervalProvinceSelect').addEventListener('change',e=>{loadVervalRegencies(e.target.value).catch(err=>setVervalRegionLoadStatus(err.message||'Gagal memuat kabupaten/kota.',true));});
-  $('#vervalDistrictSelect').addEventListener('change',e=>{$('#confirmVervalCheck').disabled=!e.target.value;});
+  $('#vervalDistrictSelect').addEventListener('change',e=>{
+    const option=e.target.selectedOptions?.[0],placement=getPlacementRegion();
+    loadVervalSubdistricts(option?.dataset?.id||'',normalizeRegionName(e.target.value)===normalizeRegionName(placement.kabupaten)?placement.kecamatan:'')
+      .catch(error=>setVervalRegionLoadStatus(error.message||'Gagal memuat kecamatan.',true));
+  });
+  $('#vervalSubdistrictSelect').addEventListener('change',e=>{$('#confirmVervalCheck').disabled=!$('#vervalDistrictSelect').value||!e.target.value;});
   $('#confirmVervalCheck').addEventListener('click',confirmVervalRegionSelection);
   $('#loginContinue').addEventListener('click',preflightLogin);$('#authForm').addEventListener('submit',submitLogin);
   $('#backToUsername').addEventListener('click',()=>{$('#credentialStep').hidden=true;$('#authActions').hidden=true;$('#loginContinue').hidden=false;$('#loginPassword').value='';preflightNeedsOtp=false;loginMessage('');});
