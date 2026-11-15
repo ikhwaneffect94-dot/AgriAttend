@@ -1,32 +1,32 @@
-# AgriAttend Android Ready v1.7.4
+# AgriAttend Android Ready v1.7.5
 
 AgriAttend is an Android companion client for AgriConnect HRIS.
 
 ## SIMKOPDES Verval
 
-AgriAttend reads the placement hierarchy and assigned cooperative from the AgriConnect employee profile. The lookup distinguishes Province, Regency/City, Kecamatan, and the cooperative search phrase.
+AgriAttend reads the assigned cooperative and placement hierarchy from the AgriConnect employee profile. It separates Province, Regency/City, Kecamatan, and the cooperative name used for search.
 
-Expected example for this assignment:
+Example target:
 - Province: Kalimantan Tengah
 - Regency: Kabupaten Kapuas
 - Kecamatan: Pulau Petak
 - Cooperative search phrase: Teluk Palinget
 
-The cooperative search phrase is created separately from the raw KDKMP code: remove the KDKMP prefix, remove known region components, and retain the final two cooperative-name words. The automation sends Province → Regency/City → Kecamatan to the official SIMKOPDES Verval page before entering the shared passcode.
+The assignment parser requires a real KDKMP/KDMP/cooperative value or a meaningful assignment field. Generic loading labels such as "Memuat data penugasan" are not accepted as cooperative names.
 
-The official page is opened inside a transparent, non-interactive WebView. The app removes the old Batch 1–4-only URL query so the portal can expose Non Prioritas. Detected Non Prioritas is scanned first, followed by other detected categories if the assigned cooperative is not found. Table filtering and matching are still dependent on the live portal structure and the account's permission.
+The official Verval page runs in an internal transparent, non-interactive WebView. Region selection uses Province → Regency/City → Kecamatan before the shared passcode is entered. Non Prioritas is scanned first, followed by other detected categories. The official page's current structure and the account's access rights determine whether individual rows are available.
 
-The app does not bypass sign-in, CAPTCHA, or server-side restrictions. If the portal does not expose cooperative-level records to the current account, AgriAttend reports the result as unavailable rather than fabricating a match.
+## v1.7.5 changes
 
-## v1.7.4 changes
+- Preserve an encrypted AgriConnect session when profile/tenant data requests fail temporarily; a transient network error no longer deletes the saved session.
+- Rehydrate a saved Android session when the user opens Verval and the in-memory session is absent.
+- Restore cached employee/profile placement fields before requesting a fresh profile.
+- Reject generic loading/status text as a KDKMP placement name.
+- Re-render the placement card after profile details have loaded.
+- Invalidate the stale v1.7.1 service-worker cache and activate the updated app shell.
+- Keep the Home saved-work-location statistic removed and the small `© ikhwan_effect` footer credit.
 
-- Added a separate Kecamatan field to placement extraction and the official portal selection flow.
-- Added a Kecamatan selector to the manual fallback region picker.
-- Corrected cooperative-name parsing to search the final two words, such as **Teluk Palinget**, instead of the KDKMP identifier.
-- Removed the Batch 1–4-only query parameter from the official Verval URL.
-- Removed the Home statistic card for saved work locations.
-- Added a small `© ikhwan_effect` footer credit.
-- Checked user-facing source strings for explicit AI-related wording; none was found in the inspected UI files.
+The application does not bypass login, CAPTCHA, or server-side permission checks. No individual Verval result is fabricated when the official portal does not return a permitted record.
 
 ## AgriConnect
 
