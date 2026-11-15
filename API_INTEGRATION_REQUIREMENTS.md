@@ -1,4 +1,4 @@
-# AgriAttend API Integration Requirements v1.6.1
+# AgriAttend API Integration Requirements v1.6.2
 
 ## AgriConnect
 
@@ -34,7 +34,9 @@ Verval calls are made by the Android native HTTP client. It does not open the SI
 
 ### Encryption discovery
 
-The public API uses an encrypted `data` envelope in the documented extractor. AgriAttend discovers candidate parameters from public SIMKOPDES JavaScript bundles, then validates candidates against the smallest available statistics response before requesting the large asset tree. If the current site changes the cipher/protocol, the app reports the failure; it must not synthesize statuses.
+The public API uses an encrypted `data` envelope. AgriAttend first tries the AES-CBC/PKCS7 parameter pair observed in the supplied SIMKOPDES frontend bundle (SHA-256 of the secret as the AES-256 key and UTF-8 IV), and validates it against the smallest available statistics response before trusting it. If that pair no longer validates, it falls back to scanning public SIMKOPDES JavaScript bundles for rotated parameters. If the current site changes the cipher/protocol, the app reports the failure; it must not synthesize statuses.
+
+The Verval region picker preselects the province/district inferred from the active AgriConnect placement and restores the user's last confirmed selection when reopening the dialog. The province/district list remains editable, has a bounded 12-second network lookup, and includes local fallback lists for Kalimantan Tengah and Kalimantan Selatan.
 
 ## Explicit data limits
 
