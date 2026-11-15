@@ -1,4 +1,4 @@
-# AgriAttend Android Ready v1.7.6
+# AgriAttend Android Ready v1.7.7
 
 AgriAttend is an Android companion client for AgriConnect HRIS.
 
@@ -15,6 +15,14 @@ Example target:
 The assignment parser requires a real KDKMP/KDMP/cooperative value or a meaningful assignment field. Generic loading labels such as "Memuat data penugasan" are not accepted as cooperative names.
 
 The official Verval page runs in an internal transparent, non-interactive WebView. Region selection uses Province → Regency/City → Kecamatan before the shared passcode is entered. Non Prioritas is scanned first, followed by other detected categories. The official page's current structure and the account's access rights determine whether individual rows are available.
+
+## v1.7.7 changes
+
+- Normalize Kecamatan/Kec. options when selecting the assigned region in the official portal.
+- Keep portal diagnostics out of the cooperative asset-status card; old saved diagnostic text is sanitized on render.
+- Extract only table columns with explicit cooperative names; do not guess a cooperative name from arbitrary table cells.
+- Show asset count only when the portal provides an actual count; do not default missing values to one.
+- Keep ownership separate from asset status and show unavailable fields as `Belum tersedia`.
 
 ## v1.7.6 changes
 
