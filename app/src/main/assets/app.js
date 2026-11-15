@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.6.6';
+const CLIENT_VERSION = '1.6.7';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
@@ -621,7 +621,7 @@ function renderVervalPage(){
   const regionEl=$('#vervalPlacementRegion');if(regionEl)regionEl.textContent=regionParts.join(' · ')||'Lokasi penugasan belum terbaca dari AgriConnect';
   const found=findPlacementVervalMatch(state.vervalRecords),matched=found&&!found.ambiguous?found:null;
   const statusEl=$('#vervalPlacementStatus'),batchEl=$('#vervalPlacementBatch'),resultPanel=$('#vervalPlacementResult');
-  if(statusEl){if(matched)statusEl.textContent=matched.resultStatus||'Status pemeriksaan aset tidak terbaca';else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';else if(state.vervalMatchState==='portal_opened')statusEl.textContent='Portal resmi SIMKOPDES dibuka · menunggu hasil Verval';else statusEl.textContent='Belum diperiksa';}
+  if(statusEl){if(matched)statusEl.textContent=matched.resultStatus||'Status pemeriksaan aset tidak terbaca';else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';else if(state.vervalMatchState==='portal_opened')statusEl.textContent='Hasil Verval tersedia pada portal resmi SIMKOPDES';else statusEl.textContent='Belum diperiksa';}
   if(batchEl){batchEl.hidden=!matched||!matched.batch;batchEl.textContent=matched?.batch?`Batch ${matched.batch}`:'';}
   if(resultPanel){
     resultPanel.hidden=!matched;
@@ -691,6 +691,10 @@ window.__vervalDirectResult=function(payload){
 };
 function openVervalPortal(){
   if(!session){showAuth('Login AgriConnect diperlukan untuk membuka Pantauan Verval.');return;}
+  state.vervalRecords=[];
+  state.vervalProvinceStats=null;
+  state.vervalPhase2Rows=[];
+  state.vervalUpdatedAt='';
   state.vervalMatchState='portal_opened';
   persist();
   setVervalStatus('Membuka portal resmi SIMKOPDES. Pilih provinsi, kabupaten/kota, masukkan passcode pada halaman portal, lalu tampilkan tabel Verval.');
