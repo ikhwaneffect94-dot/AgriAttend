@@ -1,4 +1,4 @@
-# AgriAttend Android Ready v1.6.5
+# AgriAttend Android Ready v1.6.6
 
 AgriAttend is an Android companion client for AgriConnect HRIS. Its app shell renders the bundled local PWA. SIMKOPDES Verval is retrieved with direct native HTTPS API requests; it does not open the SIMKOPDES website in a browser or nested WebView.
 
