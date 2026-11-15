@@ -79,7 +79,7 @@ jobs:
           import textwrap, xml.etree.ElementTree as ET
           ET.parse('app/src/main/AndroidManifest.xml')
           gradle = open('app/build.gradle', encoding='utf-8').read()
-          assert "versionCode 39" in gradle and "versionName '1.8.0'" in gradle
+          assert "versionCode 40" in gradle and "versionName '1.8.1'" in gradle
           native = open('app/src/main/java/id/agriattend/app/SimkopdesVervalActivity.java', encoding='utf-8').read()
           assert native.count("run().catch(error=>") == 1, "Verval automation runner must be declared exactly once"
           assert "webView.setVisibility(View.VISIBLE)" in native
@@ -129,7 +129,7 @@ jobs:
           assert "function normalizeRegionName(value){return normalizeRegionText(value);}" in app
           assert "function normalizeRegionText(value)" in app
           assert "provinsi|province" in app and "district|subdistrict" in app
-          assert "const CLIENT_VERSION = '1.8.0';" in app
+          assert "const CLIENT_VERSION = '1.8.1';" in app
           assert "function getPlacementKopdesSearchName()" in app
           assert "const hasKopdesMarker=" in app
           assert "placeholder.test(v)" in app
@@ -139,19 +139,31 @@ jobs:
           assert "AndroidBridge.clearSecureSession" not in restore
           assert "Akun AgriConnect tetap tersimpan." in restore
           sw = open('app/src/main/assets/sw.js', encoding='utf-8').read()
-          assert "agriattend-shell-v1.8.0" in sw
+          assert "agriattend-shell-v1.8.1" in sw
           assert "self.skipWaiting()" in sw and "self.clients.claim()" in sw
           assert "return tokens.slice(-2).join(' ')" in app
           assert "parts.slice(1,-2).join(' ')" in app
           assert "const subdistrictKeys=" in app
           assert "placement.kecamatan" in app
-          assert "startSimkopdesVervalAutomation(provinceName,regencyName,subdistrictName,assignment,searchName)" in app
+          assert "fetchVervalPublic(provinceName,regencyName,subdistrictName,searchName)" in app
           assert "function getVervalCategoryLabel(record)" in app
           assert "function levenshteinDistance(a,b)" in app
           assert "function fuzzyKopdesNameScore(candidate,name)" in app
           assert "Masuk: ${category}" in app
           assert "},100000);" in app
           assert "state.vervalRecords=[matched]" in app and "renderVervalPage();" in app
+          public_api = open('app/src/main/java/id/agriattend/app/SimkopdesPublicApi.java', encoding='utf-8').read()
+          assert "fetchAssignedCooperativeByName" in public_api
+          assert "findCooperativeRecord" in public_api
+          assert "individualVervalBatchAvailable" in public_api
+          assert "cooperative-assets/get-all" in public_api
+          assert "cooperatives/get-all-nested" in public_api
+          assert "kecamatan|kec|district|subdistrict" in public_api
+          main_native = open('app/src/main/java/id/agriattend/app/MainActivity.java', encoding='utf-8').read()
+          assert "fetchVervalPublic(String province, String district, String subdistrict, String cooperativeName)" in main_native
+          assert "fetchAssignedCooperativeByName(" in main_native
+          assert "21042025" not in native
+          assert "publicAssetApi" in app
           html = open('app/src/main/assets/index.html', encoding='utf-8').read()
           assert "Lokasi kerja tersimpan" not in html and "statLocations" not in html
           assert 'id="vervalSubdistrictSelect"' in html
@@ -179,7 +191,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgriAttend-debug-APK-v1.8.0
+          name: AgriAttend-debug-APK-v1.8.1
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14

@@ -41,6 +41,28 @@ final class SimkopdesPublicApi {
         return fetchAssignedCooperative(province, district, assignmentCode, 0, "");
     }
 
+    /** Read-only public lookup. No Verval passcode or SIMKOPDES Bearer token is sent. */
+    JSONObject fetchAssignedCooperativeByName(String province, String district,
+                                              String subdistrict, String cooperativeName) throws Exception {
+        String districtValue = stripAdministrativePrefix(district);
+        String subdistrictValue = stripAdministrativePrefix(subdistrict);
+        String targetName = cooperativeName == null ? "" : cooperativeName.trim();
+        if (province == null || province.trim().isEmpty()
+                || districtValue.isEmpty() || subdistrictValue.isEmpty() || targetName.isEmpty()) {
+            throw new IllegalArgumentException("Provinsi, kabupaten, kecamatan, dan nama koperasi harus tersedia.");
+        }
+        String lookupKey = "KDKMP|" + districtValue + "|" + subdistrictValue + "|" + targetName;
+        JSONObject result = fetchAssignedCooperative(province.trim(), districtValue, lookupKey, 0, "");
+        result.put("requestedSubdistrict", subdistrictValue);
+        result.put("publicAssetApi", true);
+        result.put("passcodeRequired", false);
+        result.put("batchAvailable", false);
+        result.put("nonPriorityAvailable", false);
+        result.put("individualVervalBatchAvailable", false);
+        result.put("verificationScope", "public-asset-records");
+        return result;
+    }
+
     /**
      * Read-only lookup combining the public asset tree and aggregate Verval
      * endpoints. If the user has separately supplied an authorized SIMKOPDES
@@ -93,6 +115,50 @@ final class SimkopdesPublicApi {
             assetApiNote = " Data aset individual tidak berhasil ditarik: " + safeMessage(assetError) + ".";
         }
 
+        boolean directoryMatch = false;
+        if (records.length() == 0) {
+            try {
+                JSONObject directory = getDecrypted("/cooperatives/get-all-nested", parameters, apiBearer);
+                JSONObject cooperative = findCooperativeRecord(directory, province, district, subdistrictHint, target);
+                if (cooperative != null) {
+                    JSONObject record = new JSONObject();
+                    record.put("name", firstNonEmpty(readName(cooperative.opt("name")), target, target));
+                    long cooperativeId = cooperative.optLong("cooperative_id", cooperative.optLong("id", 0));
+                    record.put("cooperativeId", cooperativeId > 0 ? cooperativeId : JSONObject.NULL);
+                    record.put("assetCount", JSONObject.NULL);
+                    record.put("batch", JSONObject.NULL);
+                    record.put("priorityType", "");
+                    record.put("category", "");
+                    record.put("assetStatus", "");
+                    record.put("resultStatus", "Koperasi ditemukan pada direktori publik SIMKOPDES. Data bidang aset individual belum tersedia pada endpoint aset publik.");
+                    record.put("ownership", "");
+                    record.put("surveyor", "");
+                    record.put("latitude", JSONObject.NULL);
+                    record.put("longitude", JSONObject.NULL);
+                    record.put("mapUrl", "");
+                    Object latitude = cooperative.opt("latitude");
+                    Object longitude = cooperative.opt("longitude");
+                    if (isNumber(latitude) && isNumber(longitude)) {
+                        double lat = Double.parseDouble(String.valueOf(latitude));
+                        double lon = Double.parseDouble(String.valueOf(longitude));
+                        if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+                            record.put("latitude", lat);
+                            record.put("longitude", lon);
+                            record.put("mapUrl", "https://www.google.com/maps?q=" + lat + "," + lon);
+                        }
+                    }
+                    record.put("province", province);
+                    record.put("district", district);
+                    record.put("subdistrict", subdistrictHint);
+                    record.put("sourceText", "Direktori koperasi publik SIMKOPDES · data aset individual belum tersedia");
+                    records.put(record);
+                    directoryMatch = true;
+                }
+            } catch (Exception directoryError) {
+                assetApiNote += " Direktori koperasi publik tidak dapat diperiksa: " + safeMessage(directoryError) + ".";
+            }
+        }
+
         // Optional province statistics are fetched only after the primary asset
         // request. The phase-2 route is deliberately omitted: the current server
         // responds HTTP 403 for it, and it is not part of the public extractor's
@@ -134,7 +200,15 @@ final class SimkopdesPublicApi {
         result.put("success", records.length() > 0 || hasRegionalStats);
         result.put("records", records);
         result.put("updatedAt", System.currentTimeMillis());
-        result.put("source", "SIMKOPDES API langsung: cooperative-assets/get-all; statistik provinsi bersifat opsional");
+        result.put("source", "API publik SIMKOPDES: cooperative-assets/get-all + cooperatives/get-all-nested; tanpa token");
+        result.put("publicAssetApi", true);
+        result.put("directoryMatch", directoryMatch);
+        result.put("assetRecordCount", directoryMatch && records.length() == 1 ? 0 : records.length());
+        result.put("verificationScope", "public-asset-records");
+        result.put("passcodeRequired", false);
+        result.put("batchAvailable", false);
+        result.put("nonPriorityAvailable", false);
+        result.put("individualVervalBatchAvailable", false);
         result.put("assetApiNote", assetApiNote);
         result.put("endpointNotes", endpointNotes.toString());
         result.put("verificationStatsAvailable", verificationProvince != null);
@@ -152,9 +226,11 @@ final class SimkopdesPublicApi {
         if (records.length() == 0 && hasRegionalStats) {
             result.put("message", "Statistik Verval tingkat provinsi berhasil dibaca, tetapi data aset individual Kopdes penugasan belum ditemukan." + assetApiNote);
         } else if (records.length() == 0) {
-            result.put("message", "Belum ditemukan data aset yang cocok dengan nama Kopdes penugasan. Statistik Batch 1–4 dan non-prioritas tidak tersedia pada endpoint yang berhasil diidentifikasi." + assetApiNote);
+            result.put("message", "Nama koperasi tidak ditemukan pada direktori maupun data aset publik SIMKOPDES." + assetApiNote);
+        } else if (directoryMatch) {
+            result.put("message", "Koperasi ditemukan pada direktori publik, tetapi belum ada baris bidang aset individual yang cocok. Kategori Batch 1–4 dan Non Prioritas tidak tersedia pada API publik." + assetApiNote);
         } else {
-            result.put("message", "Data aset Kopdes dan statistik verifikasi wilayah berhasil dibaca. Statistik wilayah bersifat agregat, bukan hasil individual koperasi." + assetApiNote);
+            result.put("message", "Data bidang aset publik koperasi berhasil dibaca. API publik tidak menyediakan kategori Batch 1–4 atau Non Prioritas individual." + assetApiNote);
         }
         return result;
     }
@@ -340,9 +416,10 @@ final class SimkopdesPublicApi {
         return output;
     }
 
-    private long findCooperativeId(JSONObject root, String province, String district, String subdistrictHint, String target) {
+    private JSONObject findCooperativeRecord(JSONObject root, String province, String district,
+                                              String subdistrictHint, String target) {
         JSONArray provinces = root == null ? null : root.optJSONArray("grouped");
-        if (provinces == null) return 0;
+        if (provinces == null) return null;
         for (int p = 0; p < provinces.length(); p++) {
             JSONObject pNode = provinces.optJSONObject(p);
             if (pNode == null || !sameRegion(pNode.optString("province", ""), province)) continue;
@@ -362,14 +439,18 @@ final class SimkopdesPublicApi {
                     if (cooperatives == null) continue;
                     for (int c = 0; c < cooperatives.length(); c++) {
                         JSONObject coop = cooperatives.optJSONObject(c);
-                        if (coop != null && sameCooperative(coop.optString("name", ""), target)) {
-                            return coop.optLong("cooperative_id", 0);
-                        }
+                        if (coop != null && sameCooperative(readName(coop.opt("name")), target)) return coop;
                     }
                 }
             }
         }
-        return 0;
+        return null;
+    }
+
+    private long findCooperativeId(JSONObject root, String province, String district,
+                                    String subdistrictHint, String target) {
+        JSONObject cooperative = findCooperativeRecord(root, province, district, subdistrictHint, target);
+        return cooperative == null ? 0 : cooperative.optLong("cooperative_id", cooperative.optLong("id", 0));
     }
 
     private JSONArray extractFacilitatorAssets(Object payload, long cooperativeId,
@@ -821,9 +902,16 @@ final class SimkopdesPublicApi {
     }
 
     private static boolean sameRegion(String left, String right) {
-        String a = normalize(left).replaceAll("\\b(kabupaten|kab|kota|administrasi|provinsi|prov)\\b", " ").replaceAll("\\s+", " ").trim();
-        String b = normalize(right).replaceAll("\\b(kabupaten|kab|kota|administrasi|provinsi|prov)\\b", " ").replaceAll("\\s+", " ").trim();
+        String prefixes = "\\b(kabupaten|kab|kota|administrasi|provinsi|prov|kecamatan|kec|district|subdistrict)\\b";
+        String a = normalize(left).replaceAll(prefixes, " ").replaceAll("\\s+", " ").trim();
+        String b = normalize(right).replaceAll(prefixes, " ").replaceAll("\\s+", " ").trim();
         return !a.isEmpty() && a.equals(b);
+    }
+
+    private static String stripAdministrativePrefix(String value) {
+        return normalize(value == null ? "" : value)
+                .replaceAll("^(kabupaten|kab|kota|administrasi|provinsi|prov|kecamatan|kec|district|subdistrict)\\s*", "")
+                .replaceAll("\\s+", " ").trim();
     }
 
     private static boolean sameCooperative(String cooperative, String target) {

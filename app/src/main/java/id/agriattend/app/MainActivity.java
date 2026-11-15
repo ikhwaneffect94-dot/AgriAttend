@@ -567,6 +567,48 @@ public class MainActivity extends Activity {
         });
     }
 
+    /** Public, read-only SIMKOPDES data path. No Verval passcode or Bearer token is sent. */
+    private void fetchVervalPublic(String province, String district, String subdistrict, String cooperativeName) {
+        String provinceName = province == null ? "" : province.trim();
+        String districtName = district == null ? "" : district.trim();
+        String subdistrictName = subdistrict == null ? "" : subdistrict.trim();
+        String targetName = cooperativeName == null ? "" : cooperativeName.trim();
+        if (provinceName.isEmpty() || districtName.isEmpty() || subdistrictName.isEmpty() || targetName.isEmpty()) {
+            JSONObject failure = new JSONObject();
+            try {
+                failure.put("success", false);
+                failure.put("publicAssetApi", true);
+                failure.put("message", "Provinsi, kabupaten/kota, kecamatan, dan nama koperasi penugasan harus tersedia.");
+                failure.put("records", new org.json.JSONArray());
+            } catch (Exception ignored) { }
+            postVervalDirectResult(failure);
+            return;
+        }
+        runOnUiThread(() -> {
+            if (webView != null) webView.evaluateJavascript(
+                    "window.__vervalDirectStatus && window.__vervalDirectStatus('Mengambil data aset dari API publik SIMKOPDES tanpa passcode atau Bearer token…');", null);
+        });
+        networkExecutor.execute(() -> {
+            JSONObject result;
+            try {
+                // Deliberately do not read or send any saved facilitator token.
+                result = new SimkopdesPublicApi().fetchAssignedCooperativeByName(
+                        provinceName, districtName, subdistrictName, targetName);
+            } catch (Exception error) {
+                result = new JSONObject();
+                try {
+                    result.put("success", false);
+                    result.put("publicAssetApi", true);
+                    result.put("passcodeRequired", false);
+                    result.put("message", error.getMessage() == null
+                            ? "Pengambilan data dari API publik SIMKOPDES gagal." : error.getMessage());
+                    result.put("records", new org.json.JSONArray());
+                } catch (Exception ignored) { }
+            }
+            postVervalDirectResult(result);
+        });
+    }
+
     /** Legacy direct API path retained temporarily for compatibility with old saved builds. */
     private void fetchVervalDirect(String province, String district, String assignmentCode) {
         String provinceName = province == null ? "" : province.trim();
@@ -670,6 +712,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void fetchVervalDirect(String provinsi, String kabupaten, String assignmentCode) {
             MainActivity.this.fetchVervalDirect(provinsi, kabupaten, assignmentCode);
+        }
+
+        @JavascriptInterface
+        public void fetchVervalPublic(String province, String district, String subdistrict, String cooperativeName) {
+            MainActivity.this.fetchVervalPublic(province, district, subdistrict, cooperativeName);
         }
 
         @JavascriptInterface

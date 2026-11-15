@@ -795,10 +795,10 @@ function renderVervalPage(){
   }
   if(batchEl){
     const category=matched?getVervalCategoryLabel(matched):'';
-    const label=matched?`Masuk: ${category}`:'';
+    const label=matched&&category!=='Kategori belum terbaca'?`Kategori: ${category}`:'';
     batchEl.hidden=!label;
     batchEl.textContent=label;
-    batchEl.title=matched?'Kategori resmi yang terbaca dari hasil Verval SIMKOPDES':'';
+    batchEl.title=label?'Kategori yang benar-benar tersedia pada sumber data SIMKOPDES':'';
   }
   if(resultPanel){
     resultPanel.hidden=!matched;
@@ -903,7 +903,7 @@ window.__vervalDirectResult=function(payload){
     }
     const records=Array.from(cooperativeGroups.values()).map(row=>{
       const isNonPriority=[row.batch,row.priorityType,row.category,...row.categories].some(value=>/non[\\s_-]*prioritas/i.test(String(value||'')));
-      return {...row,priorityType:isNonPriority?'Non Prioritas':(row.priorityType||'Prioritas')};
+      return {...row,priorityType:isNonPriority?'Non Prioritas':(row.priorityType||'')};
     });
     const verificationStats=result.verificationStats&&typeof result.verificationStats==='object'&&!Array.isArray(result.verificationStats)?result.verificationStats:null;
     const phase2Rows=Array.isArray(result.phase2Rows)?result.phase2Rows:[];
@@ -922,12 +922,12 @@ window.__vervalDirectResult=function(payload){
     state.vervalStatsSource=String(result.source||'API statistik SIMKOPDES');
     if(!matched){
       state.vervalRecords=[];state.vervalMatchState='not_found';state.vervalError='';persist();renderVervalPage();
-      const coverageNote=coverageComplete
-        ?`Kategori yang diperiksa: ${coverageLabel}.`
-        :`Cakupan belum dapat dipastikan. Kategori yang berhasil terdeteksi: ${coverageLabel}. Periksa diagnostik kategori portal.`;
+      const coverageNote=result.publicAssetApi
+        ?'API publik tidak menyediakan kategori Batch 1–4 atau Non Prioritas individual.'
+        :(coverageComplete?`Kategori yang diperiksa: ${coverageLabel}.`:`Cakupan kategori belum dapat dipastikan: ${coverageLabel}.`);
       if(hasRegionalStats){
         const extraNotes=[result.endpointNotes,result.assetApiNote].filter(Boolean).join(' ');
-        setVervalStatus(`Statistik wilayah berhasil ditarik, tetapi ${getPlacementDisplayName()} belum ditemukan. ${coverageNote} ${extraNotes}`);
+        setVervalStatus(`Statistik wilayah agregat berhasil dibaca, tetapi ${getPlacementDisplayName()} belum ditemukan pada data aset publik. ${coverageNote} ${extraNotes}`);
         showToast('Statistik wilayah tersedia; koperasi penugasan belum ditemukan.');
         return;
       }
@@ -936,15 +936,16 @@ window.__vervalDirectResult=function(payload){
     if(matched.ambiguous){state.vervalRecords=[];state.vervalMatchState='ambiguous';state.vervalError='Lebih dari satu aset cocok dengan nama Kopdes penempatan. Hasil tidak dipilih otomatis.';persist();renderVervalPage();throw new Error(state.vervalError);}
     state.vervalRecords=[matched];state.vervalMatchState='matched';state.vervalError='';persist();renderVervalPage();
     const note=[result.regionalFacilitatorNote,result.endpointNotes,result.assetApiNote].filter(Boolean).join(' ');
-    const coverageNote=coverageComplete
-      ?`Seluruh kategori yang terdeteksi sudah diperiksa: ${coverageLabel}.`
-      :`Perhatian: cakupan belum lengkap. Terdeteksi: ${coverageLabel}.`;
-    const paginationNote=result.paginationComplete===false
-      ?' Sebagian halaman tabel belum selesai dimuat; ulangi pemeriksaan untuk melanjutkan.'
+    const publicScopeNote=result.publicAssetApi
+      ?'API publik menyediakan data direktori dan bidang aset, tetapi tidak menyediakan kategori Batch 1–4 atau Non Prioritas per koperasi. Kategori tidak disimpulkan.'
       :'';
     const categoryList=(matched.categories||[]).filter(Boolean).join(', ');
-    setVervalStatus(`Data ditemukan: ${matched.name} (${formatVervalNumber(matched.assetCount||1)} bidang/baris). Kategori: ${categoryList||matched.priorityType||matched.batch||'tidak teridentifikasi'}. Status: ${matched.resultStatus}. ${coverageNote}${paginationNote} ${note}`);
-    showToast(coverageComplete?'Data Verval berhasil diperbarui untuk seluruh kategori.':'Data ditemukan, tetapi cakupan kategori perlu diperiksa.');
+    const assetCountNote=matched.assetCount===null||matched.assetCount===undefined
+      ?'jumlah bidang aset belum tersedia'
+      :formatVervalNumber(matched.assetCount)+' bidang aset';
+    const statusValue=matched.assetStatus||matched.resultStatus||'Status aset belum tersedia';
+    setVervalStatus(`Data publik ditemukan: ${matched.name} (${assetCountNote}). Status: ${statusValue}. ${categoryList?'Kategori: '+categoryList+'. ':''}${publicScopeNote} ${note}`);
+    showToast(result.publicAssetApi?'Data aset publik SIMKOPDES berhasil diperbarui.':'Data koperasi berhasil diperbarui.');
   }catch(e){
     const message=getFriendlyVervalError({message:e.message||'Pengambilan data SIMKOPDES gagal.'});
     if(state.vervalMatchState!=='not_found'&&state.vervalMatchState!=='ambiguous'){
@@ -1076,30 +1077,30 @@ function armVervalWatchdog(){
   const requestId=++vervalRequestId;
   vervalRequestTimer=setTimeout(()=>{
     if(requestId!==vervalRequestId||state.vervalMatchState!=='checking')return;
-    const message='Pengambilan data Verval berhenti karena melewati batas 70 detik. Tidak ada hasil yang diterima dari portal. Silakan coba lagi; detail proses sebelumnya tidak ditampilkan sebagai data berhasil.';
+    const message='Permintaan API publik SIMKOPDES melewati batas waktu. Data belum diterima; periksa koneksi lalu coba lagi.';
     state.vervalRecords=[];state.vervalMatchState='error';state.vervalError=message;
     state.vervalUpdatedAt=new Date().toISOString();persist();renderVervalPage();
     setVervalStatus(message,true);
     const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=false;btn.textContent='✓ Cek Data Verval';}
     showToast('Pengambilan data Verval melewati batas waktu.');
-  },100000);
+  },180000);
 }
 function startPlacementVerval(provinceName,regencyName,subdistrictName,assignment,searchName){
-  if(!session){showAuth('Login AgriConnect diperlukan untuk membuka Pantauan Verval.');return;}
+  if(!session){showAuth('Login AgriConnect diperlukan untuk membaca data penugasan.');return;}
   if(!provinceName||!regencyName||!subdistrictName||!assignment||!searchName){
-    setVervalStatus('Provinsi, kabupaten, kecamatan, atau nama koperasi penugasan belum terbaca lengkap.');return;
+    setVervalStatus('Provinsi, kabupaten, kecamatan, atau nama koperasi penugasan belum terbaca lengkap.',true);return;
   }
-  if(!window.AndroidBridge||typeof AndroidBridge.startSimkopdesVervalAutomation!=='function'){
-    setVervalStatus('Mesin pengambil data Verval internal tidak tersedia pada versi ini.');return;
+  if(!window.AndroidBridge||typeof AndroidBridge.fetchVervalPublic!=='function'){
+    setVervalStatus('Koneksi API publik SIMKOPDES tidak tersedia pada versi aplikasi ini.',true);return;
   }
   state.vervalRecords=[];state.vervalProvinceStats=null;state.vervalPhase2Rows=[];
   state.vervalAssignment=`${regencyName} · ${subdistrictName}`;state.vervalProvince=provinceName;state.vervalMatchState='checking';
   state.vervalUpdatedAt='';state.vervalError='';persist();armVervalWatchdog();
   const dialog=$('#vervalRegionDialog');if(dialog?.open)dialog.close();
-  const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=true;btn.textContent='Mengambil data…';}
-  setVervalStatus(`Lokasi penugasan: ${provinceName} → ${regencyName} → ${subdistrictName}. Pencarian: ${searchName}.`);
-  try{AndroidBridge.startSimkopdesVervalAutomation(provinceName,regencyName,subdistrictName,assignment,searchName);}
-  catch(error){window.__vervalDirectResult({success:false,message:error.message||'Mesin Verval internal gagal dijalankan.',records:[]});}
+  const btn=$('#openVervalCheckDialog');if(btn){btn.disabled=true;btn.textContent='Mengambil data publik…';}
+  setVervalStatus(`Menghubungi API publik SIMKOPDES: ${provinceName} → ${regencyName} → ${subdistrictName} · koperasi ${searchName}. Tanpa membuka portal dan tanpa passcode/Bearer token.`);
+  try{AndroidBridge.fetchVervalPublic(provinceName,regencyName,subdistrictName,searchName);}
+  catch(error){window.__vervalDirectResult({success:false,publicAssetApi:true,message:error.message||'Pemanggilan API publik SIMKOPDES gagal.',records:[]});}
 }
 async function confirmVervalRegionSelection(){
   if(!await ensureSessionAvailable()){

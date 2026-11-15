@@ -852,8 +852,9 @@ public final class SimkopdesVervalActivity extends Activity {
     }
 
     private String getVervalPasscode() {
-        // User-configured shared Verval passcode; keep it out of logs and UI.
-        return new String(new char[]{'2','1','0','4','2','0','2','5'});
+        // Legacy WebView automation is no longer the primary Verval path.
+        // Never embed a shared passcode in a distributable APK.
+        return "";
     }
 
     private final class PortalBridge {

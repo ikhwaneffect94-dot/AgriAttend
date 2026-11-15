@@ -120,7 +120,7 @@
       </section>
 
       <section class="page" id="page-verval">
-        <div class="page-title-row"><div><div class="eyebrow">PEMANTAUAN KOPDES</div><h1>Pantauan Verval</h1><p class="subhead">Pilih wilayah dari AgriAttend. Sistem mengisi passcode Verval secara otomatis dan menarik data koperasi yang sesuai.</p></div></div>
+        <div class="page-title-row"><div><div class="eyebrow">PEMANTAUAN KOPDES</div><h1>Pantauan Verval</h1><p class="subhead">AgriAttend mengambil data direktori dan bidang aset koperasi langsung dari API publik SIMKOPDES berdasarkan wilayah penugasan.</p></div></div>
         <article class="panel verval-placement-panel">
           <div class="verval-placement-heading">
             <div><div class="eyebrow">KOPDES PENEMPATAN</div><h2 id="vervalPlacementName">Memuat data penugasan…</h2><p id="vervalPlacementRegion">Lokasi penugasan AgriConnect</p></div>
@@ -163,8 +163,8 @@
           </details>
           <p class="verval-stats-caveat">Angka di atas adalah statistik agregat tingkat provinsi, bukan hasil individual Kopdes penempatan dan bukan pembagian Batch 1–4. Status aset individual ditampilkan terpisah pada kartu Kopdes.</p>
         </article>
-        <article class="panel verval-portal-guide"><div class="panel-head"><div><h3>Pengambilan data otomatis</h3><p>Pilih provinsi dan kabupaten/kota sekali saja.</p></div></div><p>Passcode Verval diisi otomatis oleh mesin internal AgriAttend. Halaman SIMKOPDES tidak ditampilkan; hasil tabel dibaca dan dicocokkan dengan Kopdes penugasan.</p></article>
-        <p class="verval-live-status" id="vervalLiveStatus" role="status">Tekan Cek Data Verval untuk memilih wilayah. Passcode akan diisi otomatis dan hasilnya ditarik ke kartu ini.</p>
+        <article class="panel verval-portal-guide"><div class="panel-head"><div><h3>Pengambilan data API publik</h3><p>Tanpa membuka halaman portal.</p></div></div><p>Data direktori koperasi dan bidang aset dibaca langsung dari API publik SIMKOPDES. AgriAttend tidak mengirim passcode Verval atau Bearer token untuk jalur ini.</p><p>Catatan: API publik tidak menyediakan kategori Batch 1–4 atau Non Prioritas per koperasi. Kategori tersebut hanya akan ditampilkan bila benar-benar tersedia pada sumber resmi.</p></article>
+        <p class="verval-live-status" id="vervalLiveStatus" role="status">Tekan Cek Data Verval untuk mengambil direktori dan data bidang aset publik sesuai wilayah penugasan.</p>
       </section>
       <section class="page" id="page-profile">
         <div class="page-title-row"><div><div class="eyebrow">DATA KARYAWAN</div><h1>Profil Karyawan</h1><p class="subhead">Informasi profil aktif yang dibaca dari endpoint profil AgriConnect.</p></div><button class="outline-btn" id="refreshProfile">Muat ulang profil ↻</button></div>
@@ -236,7 +236,7 @@
     <div class="field-block"><label for="vervalProvinceSelect">Provinsi</label><select id="vervalProvinceSelect"><option value="">Pilih provinsi</option></select></div>
     <div class="field-block"><label for="vervalDistrictSelect">Kabupaten / Kota</label><select id="vervalDistrictSelect" disabled><option value="">Pilih provinsi terlebih dahulu</option></select></div>
     <div class="field-block"><label for="vervalSubdistrictSelect">Kecamatan</label><select id="vervalSubdistrictSelect" disabled><option value="">Pilih kabupaten/kota terlebih dahulu</option></select></div>
-    <div class="verval-match-preview"><small>KOPDES PENUGASAN YANG AKAN DICARI</small><b id="vervalTargetPreview">Mengikuti nama penugasan AgriConnect</b><p>Setelah wilayah dipilih, AgriAttend menjalankan alur passcode resmi secara otomatis dan mencari nama koperasi ini pada tabel hasil.</p></div>
+    <div class="verval-match-preview"><small>KOPDES PENUGASAN YANG AKAN DICARI</small><b id="vervalTargetPreview">Mengikuti nama penugasan AgriConnect</b><p>Setelah wilayah dipilih, AgriAttend mencari koperasi pada direktori dan data bidang aset publik SIMKOPDES tanpa membuka halaman portal.</p></div>
     <p id="vervalRegionLoadStatus" class="verval-region-load-status" role="status">Pilih provinsi, kemudian kabupaten/kota.</p>
     <div class="modal-actions"><button class="primary-btn full" id="confirmVervalCheck" type="button" disabled>Tarik Data Verval</button></div>
   </dialog>
