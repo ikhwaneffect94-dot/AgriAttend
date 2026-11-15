@@ -1,0 +1,727 @@
+package id.agriattend.app;
+
+import android.util.Base64;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
+/** Direct read-only client for SIMKOPDES public cooperative asset data.
+ * It does not create a portal WebView, submit a passcode, or access protected
+ * Verval batch data. Only fields exposed by the public API are returned.
+ */
+final class SimkopdesPublicApi {
+    private static final String SITE = "https://simkopdes.go.id";
+    private static final String API = "https://api.simkopdes.go.id/api";
+    private static final int CONNECT_TIMEOUT_MS = 25000;
+    private static final int READ_TIMEOUT_MS = 120000;
+    private static final int MAX_RESPONSE_BYTES = 70 * 1024 * 1024;
+
+    JSONObject fetchAssignedCooperative(String province, String district, String assignmentCode) throws Exception {
+        return fetchAssignedCooperative(province, district, assignmentCode, 0, "");
+    }
+
+    /**
+     * Read-only lookup combining the public asset tree and aggregate Verval
+     * endpoints. If the user has separately supplied an authorized SIMKOPDES
+     * Bearer token and their own regional-facilitator id, the facilitator-scoped
+     * asset endpoint is queried as an additional source. The shared Verval page
+     * passcode is NOT treated as an API token.
+     */
+    JSONObject fetchAssignedCooperative(String province, String district, String assignmentCode,
+                                        int facilitatorId, String facilitatorBearer) throws Exception {
+        String target = targetFromAssignment(assignmentCode);
+        String subdistrictHint = subdistrictFromAssignment(assignmentCode);
+        if (target.isEmpty()) throw new IllegalArgumentException("Nama Kopdes penugasan tidak terbaca dari AgriConnect.");
+
+        List<CipherParameters> candidates = discoverCipherCandidates();
+        CipherParameters workingCipher = discoverWorkingCipher(candidates);
+        List<CipherParameters> parameters = new ArrayList<>();
+        if (workingCipher != null) parameters.add(workingCipher);
+        else parameters.addAll(candidates);
+
+        StringBuilder endpointNotes = new StringBuilder();
+        JSONObject verificationStats = optionalDecryptedObject("/statistics/asset-verification-validation", parameters, endpointNotes);
+        JSONObject verificationProvince = findVerificationProvince(verificationStats, province);
+        JSONObject phase2Root = optionalDecryptedObject("/statistics/national/phase-2", parameters, endpointNotes);
+        JSONArray phase2Rows = findPhase2ProvinceRows(phase2Root, province);
+
+        JSONArray records = new JSONArray();
+        String assetApiNote = "";
+        try {
+            JSONObject tree = getDecrypted("/cooperative-assets/get-all", parameters);
+            records = extractAssets(tree, province, district, subdistrictHint, target);
+        } catch (Exception assetError) {
+            assetApiNote = " Data aset individual tidak berhasil ditarik: " + safeMessage(assetError) + ".";
+        }
+
+        JSONArray facilitatorRecords = new JSONArray();
+        String facilitatorNote = "";
+        if (facilitatorId > 0 && facilitatorBearer != null && !facilitatorBearer.trim().isEmpty()) {
+            try {
+                JSONObject cooperativeTree = getDecrypted("/cooperatives/get-all-nested", parameters);
+                long cooperativeId = findCooperativeId(cooperativeTree, province, district, subdistrictHint, target);
+                if (cooperativeId > 0) {
+                    Object scoped = getDecryptedPayload(
+                            "/cooperative-assets/by-regional-facilitator-id/" + facilitatorId,
+                            parameters, facilitatorBearer.trim());
+                    facilitatorRecords = extractFacilitatorAssets(scoped, cooperativeId, province, district, target);
+                    if (facilitatorRecords.length() > 0) {
+                        records = facilitatorRecords;
+                        facilitatorNote = "Data aset juga cocok dari endpoint khusus pendamping.";
+                    } else {
+                        facilitatorNote = "Endpoint khusus pendamping berhasil dipanggil, tetapi tidak mengembalikan aset untuk koperasi penugasan ini.";
+                    }
+                } else {
+                    facilitatorNote = "ID koperasi tidak berhasil dipetakan pada daftar SIMKOPDES; dipakai data aset publik umum.";
+                }
+            } catch (Exception scopedError) {
+                // Keep the public read-only dataset available even when the optional
+                // account-scoped route rejects/has an expired token.
+                facilitatorNote = "Endpoint khusus pendamping tidak dapat dibaca (" + safeMessage(scopedError) + "); data publik umum tetap dipakai.";
+            }
+        }
+
+        JSONObject result = new JSONObject();
+        boolean hasRegionalStats = verificationProvince != null || phase2Rows.length() > 0;
+        result.put("success", records.length() > 0 || hasRegionalStats);
+        result.put("records", records);
+        result.put("updatedAt", System.currentTimeMillis());
+        result.put("source", "SIMKOPDES API langsung: cooperative-assets/get-all; statistics/asset-verification-validation; statistics/national/phase-2");
+        result.put("assetApiNote", assetApiNote);
+        result.put("endpointNotes", endpointNotes.toString());
+        result.put("verificationStatsAvailable", verificationProvince != null);
+        result.put("phase2StatsAvailable", phase2Rows.length() > 0);
+        result.put("batchAvailable", false);
+        result.put("nonPriorityAvailable", false);
+        result.put("passcodeRequired", false);
+        result.put("targetName", target);
+        result.put("province", province);
+        result.put("district", district);
+        result.put("verificationStats", verificationProvince == null ? JSONObject.NULL : verificationProvince);
+        result.put("phase2Rows", phase2Rows);
+        result.put("regionalFacilitatorUsed", facilitatorRecords.length() > 0);
+        result.put("regionalFacilitatorNote", facilitatorNote);
+        if (records.length() == 0 && hasRegionalStats) {
+            result.put("message", "Statistik Verval tingkat provinsi berhasil dibaca, tetapi data aset individual Kopdes penugasan belum ditemukan." + assetApiNote);
+        } else if (records.length() == 0) {
+            result.put("message", "Belum ditemukan data aset yang cocok dengan nama Kopdes penugasan. Statistik Batch 1–4 dan non-prioritas tidak tersedia pada endpoint yang berhasil diidentifikasi." + assetApiNote);
+        } else {
+            result.put("message", "Data aset Kopdes dan statistik verifikasi wilayah berhasil dibaca. Statistik wilayah bersifat agregat, bukan hasil individual koperasi." + assetApiNote);
+        }
+        return result;
+    }
+
+    private JSONObject optionalDecryptedObject(String endpoint, List<CipherParameters> candidates, StringBuilder notes) {
+        try {
+            Object payload = getDecryptedPayload(endpoint, candidates, "");
+            if (!(payload instanceof JSONObject)) {
+                if (notes != null) notes.append(endpoint).append(": respons bukan objek JSON; ");
+                return new JSONObject();
+            }
+            JSONObject object = (JSONObject) payload;
+            JSONObject nested = object.optJSONObject("data");
+            return nested != null ? nested : object;
+        } catch (Exception error) {
+            if (notes != null) notes.append(endpoint).append(": ").append(safeMessage(error)).append("; ");
+            return new JSONObject();
+        }
+    }
+
+    /**
+     * Validate the discovered AES candidates against the smallest available
+     * statistics response first. The previous implementation tried candidates
+     * against /cooperative-assets/get-all (a very large response), which made a
+     * wrong candidate expensive and hid the useful failure point. The returned
+     * candidate must decrypt into a recognisable SIMKOPDES response shape.
+     */
+    private CipherParameters discoverWorkingCipher(List<CipherParameters> candidates) throws Exception {
+        String[] endpoints = new String[]{
+                "/statistics/asset-verification-validation",
+                "/statistics/national/phase-2",
+                "/cooperative-assets/get-all"
+        };
+        String lastError = "Tidak ada respons statistik yang dapat dipakai untuk memvalidasi parameter dekripsi.";
+        for (String endpoint : endpoints) {
+            try {
+                String responseText = httpGet(API + endpoint);
+                JSONObject envelope = new JSONObject(responseText);
+                Object data = envelope.opt("data");
+                if (data instanceof JSONObject || data instanceof JSONArray) {
+                    // This endpoint is already plain JSON. Keep the discovered
+                    // candidates for other endpoints, which may still be encrypted.
+                    return null;
+                }
+                if (!(data instanceof String)) {
+                    lastError = "Respons " + endpoint + " tidak memiliki field data.";
+                    continue;
+                }
+                String encoded = ((String) data).replaceAll("\\s+", "");
+                if (encoded.startsWith("{") || encoded.startsWith("[")) {
+                    Object parsed = parseJsonPayload(encoded);
+                    if (isExpectedPayload(endpoint, parsed)) return null;
+                }
+                byte[] ciphertext = Base64.decode(encoded, Base64.DEFAULT);
+                for (CipherParameters candidate : candidates) {
+                    try {
+                        Object parsed = decryptPayload(ciphertext, candidate);
+                        if (isExpectedPayload(endpoint, parsed)) return candidate;
+                    } catch (Exception ignored) {
+                        // Continue testing candidates against this small response.
+                    }
+                }
+                lastError = "Tidak ada kandidat AES yang memvalidasi respons " + endpoint + ".";
+            } catch (Exception error) {
+                lastError = safeMessage(error);
+            }
+        }
+        throw new IllegalStateException("Parameter dekripsi SIMKOPDES belum tervalidasi. " + lastError);
+    }
+
+    private boolean isExpectedPayload(String endpoint, Object parsed) {
+        if (!(parsed instanceof JSONObject)) return false;
+        JSONObject object = (JSONObject) parsed;
+        JSONObject nested = object.optJSONObject("data");
+        if (nested != null) object = nested;
+        if (endpoint.contains("asset-verification-validation")) {
+            return object.has("provinces") || object.has("statistic");
+        }
+        if (endpoint.contains("national/phase-2")) {
+            return object.has("national_totals") || object.has("province_distribution")
+                    || (object.optJSONObject("data") != null
+                    && (object.optJSONObject("data").has("national_totals") || object.optJSONObject("data").has("province_distribution")));
+        }
+        if (endpoint.contains("by-regional-facilitator-id")) {
+            return object.optJSONArray("data") != null || object.optJSONArray("assets") != null;
+        }
+        return object.has("grouped");
+    }
+
+    private Object parseJsonPayload(String value) throws Exception {
+        String plain = value == null ? "" : value.replaceFirst("^\\uFEFF", "").trim();
+        if (plain.startsWith("{")) return new JSONObject(plain);
+        if (plain.startsWith("[")) return new JSONArray(plain);
+        throw new IllegalStateException("Payload bukan JSON.");
+    }
+
+    private Object decryptPayload(byte[] ciphertext, CipherParameters candidate) throws Exception {
+        if (candidate == null || candidate.key.length != 32 || candidate.iv.length != 16) {
+            throw new IllegalStateException("Parameter AES tidak lengkap.");
+        }
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(candidate.key, "AES"), new IvParameterSpec(candidate.iv));
+        String plain = new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8).replaceFirst("^\\uFEFF", "").trim();
+        return parseJsonPayload(plain);
+    }
+
+    private JSONObject findVerificationProvince(JSONObject response, String province) throws Exception {
+        JSONArray rows = response == null ? null : response.optJSONArray("provinces");
+        if (rows == null) return null;
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject row = rows.optJSONObject(i);
+            if (row != null && sameRegion(row.optString("province_name", ""), province)) {
+                JSONObject copy = new JSONObject(row.toString());
+                JSONObject detail = row.optJSONObject("verification_detail");
+                copy.put("verification_detail", detail == null ? new JSONObject() : detail);
+                return copy;
+            }
+        }
+        return null;
+    }
+
+    private JSONArray findPhase2ProvinceRows(JSONObject response, String province) {
+        JSONObject data = response == null ? null : response.optJSONObject("data");
+        if (data == null) data = response;
+        JSONArray rows = data == null ? null : data.optJSONArray("province_distribution");
+        JSONArray output = new JSONArray();
+        if (rows == null) return output;
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject row = rows.optJSONObject(i);
+            if (row != null && sameRegion(row.optString("province_name", ""), province)) output.put(row);
+        }
+        return output;
+    }
+
+    private long findCooperativeId(JSONObject root, String province, String district, String subdistrictHint, String target) {
+        JSONArray provinces = root == null ? null : root.optJSONArray("grouped");
+        if (provinces == null) return 0;
+        for (int p = 0; p < provinces.length(); p++) {
+            JSONObject pNode = provinces.optJSONObject(p);
+            if (pNode == null || !sameRegion(pNode.optString("province", ""), province)) continue;
+            JSONArray districts = pNode.optJSONArray("districts");
+            if (districts == null) continue;
+            for (int d = 0; d < districts.length(); d++) {
+                JSONObject dNode = districts.optJSONObject(d);
+                if (dNode == null || !sameRegion(dNode.optString("district", ""), district)) continue;
+                JSONArray subdistricts = dNode.optJSONArray("subdistricts");
+                if (subdistricts == null) continue;
+                for (int s = 0; s < subdistricts.length(); s++) {
+                    JSONObject sNode = subdistricts.optJSONObject(s);
+                    if (sNode == null) continue;
+                    if (subdistrictHint != null && !subdistrictHint.isEmpty()
+                            && !sameRegion(sNode.optString("subdistrict", ""), subdistrictHint)) continue;
+                    JSONArray cooperatives = sNode.optJSONArray("cooperatives");
+                    if (cooperatives == null) continue;
+                    for (int c = 0; c < cooperatives.length(); c++) {
+                        JSONObject coop = cooperatives.optJSONObject(c);
+                        if (coop != null && sameCooperative(coop.optString("name", ""), target)) {
+                            return coop.optLong("cooperative_id", 0);
+                        }
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+
+    private JSONArray extractFacilitatorAssets(Object payload, long cooperativeId,
+                                               String province, String district, String target) throws Exception {
+        JSONArray rows = payload instanceof JSONArray ? (JSONArray) payload : null;
+        if (payload instanceof JSONObject) {
+            JSONObject object = (JSONObject) payload;
+            rows = object.optJSONArray("data");
+            if (rows == null) rows = object.optJSONArray("assets");
+        }
+        JSONArray output = new JSONArray();
+        if (rows == null) return output;
+        JSONObject groupedRecord = null;
+        int matchedAssets = 0;
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject asset = rows.optJSONObject(i);
+            if (asset == null || asset.optLong("cooperative_id", 0) != cooperativeId) continue;
+            if (groupedRecord == null) groupedRecord = new JSONObject();
+            matchedAssets++;
+            JSONObject record = new JSONObject();
+            record.put("name", target);
+            record.put("cooperativeId", cooperativeId);
+            record.put("assetId", asset.opt("cooperative_asset_id"));
+            record.put("resultStatus", firstNonEmpty(asset.optString("status", ""), asset.optString("asset_status", ""), "Status aset tidak tersedia"));
+            record.put("assetStatus", asset.optString("asset_status", ""));
+            record.put("ownership", asset.optString("ownership", ""));
+            record.put("surveyor", asset.optString("surveyor", ""));
+            record.put("address", asset.optString("address", ""));
+            record.put("latitude", JSONObject.NULL);
+            record.put("longitude", JSONObject.NULL);
+            record.put("mapUrl", "");
+            Object lat = asset.opt("latitude"), lon = asset.opt("longitude");
+            if (isNumber(lat) && isNumber(lon)) {
+                double latitude = Double.parseDouble(String.valueOf(lat));
+                double longitude = Double.parseDouble(String.valueOf(lon));
+                if (latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
+                    record.put("latitude", latitude); record.put("longitude", longitude);
+                    record.put("mapUrl", "https://www.google.com/maps?q=" + latitude + "," + longitude);
+                }
+            }
+            record.put("province", province); record.put("district", district);
+            record.put("sourceText", "API khusus pendamping SIMKOPDES · cooperative-assets/by-regional-facilitator-id");
+            if (groupedRecord.optString("name", "").isEmpty()) {
+                groupedRecord = new JSONObject(record.toString());
+            } else {
+                String currentStatus = groupedRecord.optString("resultStatus", "");
+                String nextStatus = record.optString("resultStatus", "");
+                if (!nextStatus.isEmpty() && !currentStatus.contains(nextStatus)) {
+                    groupedRecord.put("resultStatus", currentStatus + " · " + nextStatus);
+                }
+                if (groupedRecord.isNull("latitude") && !record.isNull("latitude")) {
+                    groupedRecord.put("latitude", record.opt("latitude"));
+                    groupedRecord.put("longitude", record.opt("longitude"));
+                    groupedRecord.put("mapUrl", record.optString("mapUrl", ""));
+                }
+            }
+        }
+        if (groupedRecord != null) {
+            groupedRecord.put("assetCount", matchedAssets);
+            output.put(groupedRecord);
+        }
+        return output;
+    }
+
+    private static String firstNonEmpty(String first, String second, String fallback) {
+        if (first != null && !first.trim().isEmpty()) return first.trim();
+        if (second != null && !second.trim().isEmpty()) return second.trim();
+        return fallback;
+    }
+
+    private static String safeMessage(Exception error) {
+        String value = error == null ? "akses ditolak" : error.getMessage();
+        if (value == null || value.trim().isEmpty()) return "akses ditolak";
+        String safe = value.replaceAll("(?i)(bearer\\s+)\\S+", "$1[disamarkan]");
+        return safe.substring(0, Math.min(140, safe.length()));
+    }
+
+    /**
+     * SIMKOPDES is a Next.js site. Older builds exposed the decrypt call in a
+     * dashboard chunk as (0, x.C)(payload, "secret", "iv"). Newer builds can
+     * move the decrypt helper into the protected Verval route chunk or change
+     * the minified function name. Discover scripts from both routes and collect
+     * candidate (secret, IV) pairs; the actual API response is used below to
+     * validate candidates before any record is accepted.
+     */
+    private List<CipherParameters> discoverCipherCandidates() throws Exception {
+        String[] pages = new String[]{
+                SITE + "/pers/asset/verval?batch_verification=1%2C2%2C3%2C4",
+                SITE + "/pers/dashboard",
+                SITE + "/"
+        };
+        LinkedHashSet<String> scripts = new LinkedHashSet<>();
+        Pattern attrScript = Pattern.compile("(?i)(?:src|href)\\s*=\\s*['\\\"]([^'\\\"]+\\.m?js(?:\\?[^'\\\"]*)?)['\\\"]");
+        Pattern nextScript = Pattern.compile("['\\\"]([^'\\\"]*_next/static/[^'\\\"]+\\.js(?:\\?[^'\\\"]*)?)['\\\"]");
+        Pattern oldChunk = Pattern.compile("['\\\"](/_next/static/chunks/[^'\\\"]+\\.js)['\\\"]");
+        for (String page : pages) {
+            try {
+                String html = httpGet(page);
+                collectScripts(attrScript, html, scripts);
+                collectScripts(nextScript, html, scripts);
+                collectScripts(oldChunk, html, scripts);
+            } catch (Exception ignored) {
+                // Some protected routes may redirect; public dashboard/root remain useful.
+            }
+        }
+        if (scripts.isEmpty()) {
+            throw new IllegalStateException("Daftar JavaScript publik SIMKOPDES tidak ditemukan pada halaman Verval maupun dashboard.");
+        }
+
+        Pattern oldCall = Pattern.compile("(?s)\\.([A-Za-z_$][\\w$]*)\\)\\s*\\(\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
+        Pattern namedCall = Pattern.compile("(?is)\\b(?:decrypt|decrRes|decryptResponse|decryptData)\\w*\\s*\\(\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
+        Pattern genericCall = Pattern.compile("(?s)(?:\\(\\s*0\\s*,\\s*[A-Za-z_$][\\w$.$]*\\s*\\)\\s*\\(|\\b[A-Za-z_$][\\w$.$]*\\s*\\()\\s*[^,]{1,1200},\\s*['\"]([^'\"]{16,})['\"]\\s*,\\s*['\"]([^'\"]{16})['\"]");
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        List<CipherParameters> candidates = new ArrayList<>();
+        List<String> scriptBodies = new ArrayList<>();
+        int scanned = 0;
+        for (String script : scripts) {
+            if (scanned++ >= 300) break;
+            try { scriptBodies.add(httpGet(toSiteUrl(script))); }
+            catch (Exception ignored) { /* continue to the next chunk */ }
+        }
+        // Search the exact historical marker across every downloaded chunk first.
+        // This prevents unrelated generic calls in vendor chunks from filling
+        // the candidate list before the actual SIMKOPDES decrypt helper is scanned.
+        for (String js : scriptBodies) collectLegacyCipherCalls(js, candidates, seen);
+        // Current builds may rename the helper; retain bounded generic fallbacks.
+        for (String js : scriptBodies) {
+            if (candidates.size() >= 512) break;
+            collectCandidates(oldCall, js, candidates, seen);
+            collectCandidates(namedCall, js, candidates, seen);
+            collectCandidates(genericCall, js, candidates, seen);
+        }
+        if (candidates.isEmpty()) {
+            throw new IllegalStateException("Bundle JavaScript SIMKOPDES ditemukan, tetapi parameter AES tidak dapat diekstrak. Struktur fungsi dekripsi situs berubah.");
+        }
+        return candidates;
+    }
+
+    private void collectLegacyCipherCalls(String js, List<CipherParameters> output, LinkedHashSet<String> seen) throws Exception {
+        String marker = ".C)(";
+        int at = js.indexOf(marker);
+        while (at >= 0 && output.size() < 512) {
+            int start = at + marker.length();
+            int end = Math.min(js.length(), start + 700);
+            String segment = js.substring(start, end);
+            String[] parts = segment.split("\"");
+            if (parts.length >= 4) addCipherCandidate(parts[1], parts[3], output, seen);
+            at = js.indexOf(marker, at + marker.length());
+        }
+    }
+
+    private void collectScripts(Pattern pattern, String text, LinkedHashSet<String> output) {
+        Matcher matcher = pattern.matcher(text);
+        while (matcher.find() && output.size() < 300) {
+            String path = matcher.group(1);
+            if (path == null || path.isEmpty()) continue;
+            if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("/")) output.add(path);
+            else if (path.startsWith("_next/")) output.add("/" + path);
+        }
+    }
+
+    private String toSiteUrl(String path) throws Exception {
+        if (path.startsWith("https://") || path.startsWith("http://")) {
+            URL parsed = new URL(path);
+            String host = parsed.getHost().toLowerCase(Locale.ROOT);
+            if (!(host.equals("simkopdes.go.id") || host.endsWith(".simkopdes.go.id"))) {
+                throw new SecurityException("Bundle SIMKOPDES berada di host yang tidak diizinkan.");
+            }
+            return path;
+        }
+        return SITE + (path.startsWith("/") ? path : "/" + path);
+    }
+
+    private void collectCandidates(Pattern pattern, String js, List<CipherParameters> output, LinkedHashSet<String> seen) throws Exception {
+        Matcher matcher = pattern.matcher(js);
+        while (matcher.find() && output.size() < 512) {
+            int secretGroup = matcher.groupCount() >= 3 ? 2 : 1;
+            int ivGroup = matcher.groupCount() >= 3 ? 3 : 2;
+            addCipherCandidate(matcher.group(secretGroup), matcher.group(ivGroup), output, seen);
+        }
+    }
+
+    private void addCipherCandidate(String secret, String ivText, List<CipherParameters> output,
+                                    LinkedHashSet<String> seen) throws Exception {
+        if (secret == null || ivText == null || secret.length() < 16) return;
+        byte[] iv = ivText.getBytes(StandardCharsets.UTF_8);
+        if (iv.length != 16) return;
+        String fingerprint = secret + "|" + ivText;
+        if (!seen.add(fingerprint)) return;
+        byte[] key = MessageDigest.getInstance("SHA-256").digest(secret.getBytes(StandardCharsets.UTF_8));
+        output.add(new CipherParameters(key, iv));
+    }
+
+    private JSONObject getDecrypted(String endpoint, List<CipherParameters> candidates) throws Exception {
+        Object value = getDecryptedPayload(endpoint, candidates, "");
+        if (value instanceof JSONObject) {
+            JSONObject object = (JSONObject) value;
+            JSONObject nested = object.optJSONObject("data");
+            return nested != null ? nested : object;
+        }
+        throw new IllegalStateException("Respons " + endpoint + " bukan objek JSON yang dikenali.");
+    }
+
+    private Object getDecryptedPayload(String endpoint, List<CipherParameters> candidates, String bearerToken) throws Exception {
+        String responseText = httpGet(API + endpoint, bearerToken);
+        JSONObject envelope = new JSONObject(responseText);
+        Object data = envelope.opt("data");
+        if (data instanceof JSONObject || data instanceof JSONArray) return data;
+        if (!(data instanceof String)) throw new IllegalStateException("Respons API SIMKOPDES tidak memiliki data yang dikenali.");
+
+        String encoded = ((String) data).replaceAll("\\s+", "");
+        if (encoded.startsWith("{") || encoded.startsWith("[")) return parseJsonPayload(encoded);
+        byte[] ciphertext = Base64.decode(encoded, Base64.DEFAULT);
+        String lastProblem = "Kandidat cipher tidak cocok.";
+        for (CipherParameters candidate : candidates) {
+            try {
+                Object parsed = decryptPayload(ciphertext, candidate);
+                if (isExpectedPayload(endpoint, parsed) || parsed instanceof JSONArray) return parsed;
+                lastProblem = "JSON terdekripsi tidak memiliki struktur SIMKOPDES yang dikenali.";
+            } catch (Exception error) {
+                lastProblem = error.getMessage() == null ? lastProblem : error.getMessage();
+            }
+        }
+        throw new IllegalStateException("Payload API SIMKOPDES gagal divalidasi. " + lastProblem);
+    }
+
+    private JSONArray extractAssets(JSONObject root, String province, String district, String subdistrictHint, String target) throws Exception {
+        JSONObject grouped = root.optJSONObject("grouped");
+        JSONArray output = new JSONArray();
+        LinkedHashMap<String, JSONObject> byCooperative = new LinkedHashMap<>();
+        if (grouped == null) throw new IllegalStateException("Struktur data aset SIMKOPDES berubah: bagian grouped tidak ditemukan.");
+
+        Iterator<String> provinceKeys = grouped.keys();
+        while (provinceKeys.hasNext()) {
+            String provinceKey = provinceKeys.next();
+            if (!sameRegion(provinceKey, province)) continue;
+            JSONObject provinceNode = grouped.optJSONObject(provinceKey);
+            JSONObject districts = provinceNode == null ? null : provinceNode.optJSONObject("districts");
+            if (districts == null) continue;
+
+            Iterator<String> districtKeys = districts.keys();
+            while (districtKeys.hasNext()) {
+                String districtKey = districtKeys.next();
+                if (!sameRegion(districtKey, district)) continue;
+                JSONObject districtNode = districts.optJSONObject(districtKey);
+                JSONObject subdistricts = districtNode == null ? null : districtNode.optJSONObject("subdistricts");
+                if (subdistricts == null) continue;
+
+                Iterator<String> subdistrictKeys = subdistricts.keys();
+                while (subdistrictKeys.hasNext()) {
+                    String subdistrictKey = subdistrictKeys.next();
+                    if (subdistrictHint != null && !subdistrictHint.isEmpty()
+                            && !sameRegion(subdistrictKey, subdistrictHint)) continue;
+                    JSONObject subdistrictNode = subdistricts.optJSONObject(subdistrictKey);
+                    JSONObject villages = subdistrictNode == null ? null : subdistrictNode.optJSONObject("villages");
+                    if (villages == null) continue;
+
+                    Iterator<String> villageKeys = villages.keys();
+                    while (villageKeys.hasNext()) {
+                        String villageKey = villageKeys.next();
+                        JSONObject villageNode = villages.optJSONObject(villageKey);
+                        JSONArray assets = villageNode == null ? null : villageNode.optJSONArray("assets");
+                        if (assets == null) continue;
+                        for (int i = 0; i < assets.length(); i++) {
+                            JSONObject asset = assets.optJSONObject(i);
+                            if (asset == null) continue;
+                            String cooperative = readName(asset.opt("cooperative"));
+                            if (!sameCooperative(cooperative, target)) continue;
+                            JSONObject record = new JSONObject();
+                            record.put("name", cooperative);
+                            long cooperativeNumericId = asset.optLong("cooperative_id", 0);
+                            String cooperativeId = cooperativeNumericId > 0 ? String.valueOf(cooperativeNumericId) : normalize(cooperative);
+                            record.put("cooperativeId", cooperativeNumericId > 0 ? cooperativeNumericId : JSONObject.NULL);
+                            record.put("assetId", asset.opt("asset_id"));
+                            record.put("assetCount", 1);
+                            record.put("batch", JSONObject.NULL);
+                            String status = readName(asset.opt("status"));
+                            record.put("resultStatus", status.isEmpty() ? "Status aset tidak tersedia pada API publik" : status);
+                            record.put("assetStatus", readName(asset.opt("asset_status")));
+                            record.put("surveyor", readName(asset.opt("surveyor")));
+                            Object latitude = asset.opt("latitude");
+                            Object longitude = asset.opt("longitude");
+                            if (isNumber(latitude) && isNumber(longitude)) {
+                                double lat = Double.parseDouble(String.valueOf(latitude));
+                                double lon = Double.parseDouble(String.valueOf(longitude));
+                                if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+                                    record.put("latitude", lat);
+                                    record.put("longitude", lon);
+                                    record.put("mapUrl", "https://www.google.com/maps?q=" + lat + "," + lon);
+                                } else {
+                                    record.put("latitude", JSONObject.NULL);
+                                    record.put("longitude", JSONObject.NULL);
+                                    record.put("mapUrl", "");
+                                }
+                            } else {
+                                record.put("latitude", JSONObject.NULL);
+                                record.put("longitude", JSONObject.NULL);
+                                record.put("mapUrl", "");
+                            }
+                            record.put("province", provinceKey);
+                            record.put("district", districtKey);
+                            record.put("subdistrict", subdistrictKey);
+                            record.put("village", villageKey);
+                            record.put("sourceText", "Data aset publik SIMKOPDES · " + provinceKey + " · " + districtKey + " · " + subdistrictKey + " · " + villageKey);
+                            JSONObject existing = byCooperative.get(cooperativeId);
+                            if (existing == null) {
+                                byCooperative.put(cooperativeId, record);
+                            } else {
+                                existing.put("assetCount", existing.optInt("assetCount", 1) + 1);
+                                String currentStatus = existing.optString("resultStatus", "");
+                                if (!status.isEmpty() && !currentStatus.contains(status)) existing.put("resultStatus", currentStatus + " · " + status);
+                                if (existing.isNull("latitude") && !record.isNull("latitude")) {
+                                    existing.put("latitude", record.opt("latitude"));
+                                    existing.put("longitude", record.opt("longitude"));
+                                    existing.put("mapUrl", record.optString("mapUrl", ""));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (JSONObject cooperativeRecord : byCooperative.values()) output.put(cooperativeRecord);
+        return output;
+    }
+
+    private String httpGet(String address) throws Exception {
+        return httpGet(address, "");
+    }
+
+    private String httpGet(String address, String bearerToken) throws Exception {
+        URL url = new URL(address);
+        String host = url.getHost().toLowerCase(Locale.ROOT);
+        if (!(host.equals("simkopdes.go.id") || host.endsWith(".simkopdes.go.id"))) {
+            throw new SecurityException("Host data SIMKOPDES tidak diizinkan.");
+        }
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("GET");
+        connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        connection.setReadTimeout(READ_TIMEOUT_MS);
+        connection.setInstanceFollowRedirects(true);
+        connection.setRequestProperty("Accept", "application/json,text/html,*/*");
+        connection.setRequestProperty("User-Agent", "AgriAttend-Android/1.6.1 (direct SIMKOPDES data client)");
+        if (bearerToken != null && !bearerToken.trim().isEmpty()) {
+            if (!"api.simkopdes.go.id".equals(host)) throw new SecurityException("Bearer token hanya boleh dikirim ke API SIMKOPDES resmi.");
+            connection.setRequestProperty("Authorization", "Bearer " + bearerToken.trim());
+        }
+        try {
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            String text = readLimited(stream);
+            if (status < 200 || status >= 300) throw new IllegalStateException("SIMKOPDES HTTP " + status + (text.isEmpty() ? "" : ": " + text.substring(0, Math.min(180, text.length()))));
+            return text;
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private String readLimited(InputStream input) throws Exception {
+        if (input == null) return "";
+        try (InputStream in = input; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[16384];
+            int count;
+            int total = 0;
+            while ((count = in.read(buffer)) != -1) {
+                total += count;
+                if (total > MAX_RESPONSE_BYTES) throw new IllegalStateException("Respons SIMKOPDES melebihi batas aman 70 MB.");
+                out.write(buffer, 0, count);
+            }
+            return new String(out.toByteArray(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private static String targetFromAssignment(String assignment) {
+        String raw = assignment == null ? "" : assignment.trim();
+        if (raw.isEmpty()) return "";
+        String[] parts = raw.split("[_|,;]+");
+        if (parts.length >= 3 && (parts[0].equalsIgnoreCase("KDKMP") || parts[0].equalsIgnoreCase("KDMP"))) {
+            return parts[parts.length - 1].trim();
+        }
+        return raw.replace('_', ' ').trim();
+    }
+
+    private static String subdistrictFromAssignment(String assignment) {
+        if (assignment == null || assignment.trim().isEmpty()) return "";
+        String[] parts = assignment.trim().split("[_|,;]+");
+        if (parts.length >= 4 && (parts[0].equalsIgnoreCase("KDKMP") || parts[0].equalsIgnoreCase("KDMP"))) {
+            return parts[parts.length - 2].trim();
+        }
+        return "";
+    }
+
+    private static boolean sameRegion(String left, String right) {
+        String a = normalize(left).replaceAll("\\b(kabupaten|kab|kota|administrasi|provinsi|prov)\\b", " ").replaceAll("\\s+", " ").trim();
+        String b = normalize(right).replaceAll("\\b(kabupaten|kab|kota|administrasi|provinsi|prov)\\b", " ").replaceAll("\\s+", " ").trim();
+        return !a.isEmpty() && a.equals(b);
+    }
+
+    private static boolean sameCooperative(String cooperative, String target) {
+        String a = normalize(cooperative).replaceAll("\\b(koperasi|desa|kelurahan|merah|putih|kdkmp|kdmp|kopdes)\\b", " ").replaceAll("\\s+", " ").trim();
+        String b = normalize(target).replaceAll("\\b(koperasi|desa|kelurahan|merah|putih|kdkmp|kdmp|kopdes)\\b", " ").replaceAll("\\s+", " ").trim();
+        return !a.isEmpty() && a.equals(b);
+    }
+
+    private static String normalize(String value) {
+        String decomposed = Normalizer.normalize(value == null ? "" : value, Normalizer.Form.NFD);
+        return decomposed.replaceAll("\\p{M}+", "").toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().replaceAll("\\s+", " ");
+    }
+
+    private static String readName(Object value) {
+        if (value == null || value == JSONObject.NULL) return "";
+        if (value instanceof JSONObject) {
+            JSONObject obj = (JSONObject) value;
+            for (String key : new String[]{"name", "cooperative_name", "nama", "label", "status_name"}) {
+                String candidate = obj.optString(key, "").trim();
+                if (!candidate.isEmpty()) return candidate;
+            }
+            return obj.toString();
+        }
+        return String.valueOf(value).trim();
+    }
+
+    private static boolean isNumber(Object value) {
+        if (value == null || value == JSONObject.NULL) return false;
+        try { Double.parseDouble(String.valueOf(value)); return true; }
+        catch (Exception ignored) { return false; }
+    }
+
+    private static final class CipherParameters {
+        final byte[] key;
+        final byte[] iv;
+        CipherParameters(byte[] key, byte[] iv) { this.key = key; this.iv = iv; }
+    }
+}

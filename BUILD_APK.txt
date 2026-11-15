@@ -1,0 +1,8 @@
+AgriAttend Android v1.6.1
+
+1. Upload AgriAttend-Android-Ready-v1.6.1.zip ke root repository GitHub.
+2. Pastikan `.github/workflows/android.yml` dari paket ini digunakan.
+3. Commit perubahan, buka Actions, lalu jalankan Build AgriAttend APK.
+4. Jika job berhasil, unduh artifact `AgriAttend-debug-APK-v1.6.1`.
+
+Paket berisi source project. APK belum dibangun dalam lingkungan penyusunan paket.
