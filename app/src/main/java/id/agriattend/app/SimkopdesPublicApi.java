@@ -53,8 +53,28 @@ final class SimkopdesPublicApi {
         String subdistrictHint = subdistrictFromAssignment(assignmentCode);
         if (target.isEmpty()) throw new IllegalArgumentException("Nama Kopdes penugasan tidak terbaca dari AgriConnect.");
 
-        List<CipherParameters> candidates = discoverCipherCandidates();
-        CipherParameters workingCipher = discoverWorkingCipher(candidates);
+        // The supplied SIMKOPDES frontend bundle exposes its own response
+        // decryptor: AES-CBC/PKCS7 with SHA-256(secret) and a UTF-8 IV.
+        // Try that public frontend parameter first and verify it against the
+        // smallest statistics response before trusting any decrypted payload.
+        List<CipherParameters> candidates = new ArrayList<>();
+        LinkedHashSet<String> knownCipherSeen = new LinkedHashSet<>();
+        addCipherCandidate("Bf7QmWxYzKpLnRsTuVcHdJgEiAoNpLqR", "Hx49RtWmNpQkSvYb", candidates, knownCipherSeen);
+        CipherParameters workingCipher;
+        try {
+            workingCipher = discoverWorkingCipher(candidates);
+        } catch (Exception knownCipherError) {
+            // Keep compatibility with site rotations: only scan public bundles
+            // when the currently observed frontend cipher no longer validates.
+            List<CipherParameters> discovered = discoverCipherCandidates();
+            candidates.addAll(discovered);
+            try {
+                workingCipher = discoverWorkingCipher(candidates);
+            } catch (Exception fallbackError) {
+                fallbackError.addSuppressed(knownCipherError);
+                throw fallbackError;
+            }
+        }
         List<CipherParameters> parameters = new ArrayList<>();
         if (workingCipher != null) parameters.add(workingCipher);
         else parameters.addAll(candidates);
@@ -167,9 +187,11 @@ final class SimkopdesPublicApi {
                 JSONObject envelope = new JSONObject(responseText);
                 Object data = envelope.opt("data");
                 if (data instanceof JSONObject || data instanceof JSONArray) {
-                    // This endpoint is already plain JSON. Keep the discovered
-                    // candidates for other endpoints, which may still be encrypted.
-                    return null;
+                    // Some API versions return plain JSON. Accept it only when
+                    // the response has the expected endpoint-specific structure.
+                    if (isExpectedPayload(endpoint, data)) return null;
+                    lastError = "Respons " + endpoint + " berupa JSON, tetapi strukturnya belum dikenali.";
+                    continue;
                 }
                 if (!(data instanceof String)) {
                     lastError = "Respons " + endpoint + " tidak memiliki field data.";
@@ -633,7 +655,7 @@ final class SimkopdesPublicApi {
         connection.setReadTimeout(READ_TIMEOUT_MS);
         connection.setInstanceFollowRedirects(true);
         connection.setRequestProperty("Accept", "application/json,text/html,*/*");
-        connection.setRequestProperty("User-Agent", "AgriAttend-Android/1.6.1 (direct SIMKOPDES data client)");
+        connection.setRequestProperty("User-Agent", "AgriAttend-Android/1.6.2 (direct SIMKOPDES data client)");
         if (bearerToken != null && !bearerToken.trim().isEmpty()) {
             if (!"api.simkopdes.go.id".equals(host)) throw new SecurityException("Bearer token hanya boleh dikirim ke API SIMKOPDES resmi.");
             connection.setRequestProperty("Authorization", "Bearer " + bearerToken.trim());
