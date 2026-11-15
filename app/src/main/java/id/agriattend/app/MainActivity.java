@@ -508,16 +508,65 @@ public class MainActivity extends Activity {
      * Province, district, passcode validation, and result tables are handled
      * by the official portal rather than guessed API calls in AgriAttend.
      */
-    private void openSimkopdesVervalPortal() {
+    private static final int REQUEST_SIMKOPDES_VERVAL = 4103;
+
+    private void startSimkopdesVervalAutomation(String province, String district, String assignment) {
+        String p = province == null ? "" : province.trim();
+        String d = district == null ? "" : district.trim();
+        String a = assignment == null ? "" : assignment.trim();
+        if (p.isEmpty() || d.isEmpty() || a.isEmpty()) {
+            JSONObject failure = new JSONObject();
+            try {
+                failure.put("success", false);
+                failure.put("message", "Provinsi, kabupaten/kota, dan nama Kopdes penugasan wajib tersedia.");
+                failure.put("records", new org.json.JSONArray());
+            } catch (Exception ignored) { }
+            postVervalDirectResult(failure);
+            return;
+        }
         runOnUiThread(() -> {
             try {
-                startActivity(new Intent(MainActivity.this, SimkopdesVervalActivity.class));
+                Intent intent = new Intent(MainActivity.this, SimkopdesVervalActivity.class);
+                intent.putExtra("province", p);
+                intent.putExtra("district", d);
+                intent.putExtra("assignment", a);
+                startActivityForResult(intent, REQUEST_SIMKOPDES_VERVAL);
             } catch (Exception error) {
-                Toast.makeText(MainActivity.this,
-                        "Portal Verval SIMKOPDES tidak dapat dibuka: " + error.getMessage(),
-                        Toast.LENGTH_LONG).show();
+                JSONObject failure = new JSONObject();
+                try {
+                    failure.put("success", false);
+                    failure.put("message", "Mesin Verval internal gagal dijalankan: " + error.getMessage());
+                    failure.put("records", new org.json.JSONArray());
+                } catch (Exception ignored) { }
+                postVervalDirectResult(failure);
             }
         });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_SIMKOPDES_VERVAL) return;
+        JSONObject result;
+        try {
+            String raw = data == null ? "" : data.getStringExtra("verval_result_json");
+            result = raw == null || raw.trim().isEmpty()
+                    ? new JSONObject()
+                    : new JSONObject(raw);
+            if (!result.has("success")) result.put("success", false);
+            if (!result.has("records")) result.put("records", new org.json.JSONArray());
+            if (resultCode != RESULT_OK && !result.has("message")) {
+                result.put("message", "Pengambilan data Verval dibatalkan.");
+            }
+        } catch (Exception error) {
+            result = new JSONObject();
+            try {
+                result.put("success", false);
+                result.put("message", "Respons mesin Verval tidak dapat dibaca: " + error.getMessage());
+                result.put("records", new org.json.JSONArray());
+            } catch (Exception ignored) { }
+        }
+        postVervalDirectResult(result);
     }
 
     /** Legacy direct API path retained temporarily for compatibility with old saved builds. */
@@ -616,8 +665,8 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void openSimkopdesVervalPortal() {
-            MainActivity.this.openSimkopdesVervalPortal();
+        public void startSimkopdesVervalAutomation(String province, String district, String assignment) {
+            MainActivity.this.startSimkopdesVervalAutomation(province, district, assignment);
         }
 
         @JavascriptInterface
