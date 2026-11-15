@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.7.2';
+const CLIENT_VERSION = '1.7.3';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
@@ -588,12 +588,43 @@ function getPlacementRegion(){
   if(!province&&provinceByKab[normalizedKab.replace(/\s/g,'')])province=provinceByKab[normalizedKab.replace(/\s/g,'')];
   return {kabupaten:kabupaten.trim(),province:province.trim()};
 }
+function levenshteinDistance(a,b){
+  if(a===b)return 0;
+  if(Math.abs(a.length-b.length)>1)return 2;
+  let previous=Array.from({length:b.length+1},(_,i)=>i);
+  for(let i=1;i<=a.length;i++){
+    const current=[i];let rowMin=i;
+    for(let j=1;j<=b.length;j++){
+      const cost=a[i-1]===b[j-1]?0:1;
+      current[j]=Math.min(current[j-1]+1,previous[j]+1,previous[j-1]+cost);
+      rowMin=Math.min(rowMin,current[j]);
+    }
+    if(rowMin>1)return 2;
+    previous=current;
+  }
+  return previous[b.length];
+}
+function fuzzyKopdesNameScore(candidate,name){
+  const wanted=candidate.split(' ').filter(Boolean),found=name.split(' ').filter(Boolean);
+  if(wanted.length!==found.length||!wanted.length)return 0;
+  let differences=0;
+  for(let i=0;i<wanted.length;i++){
+    if(wanted[i]===found[i])continue;
+    if(Math.min(wanted[i].length,found[i].length)<6||levenshteinDistance(wanted[i],found[i])>1)return 0;
+    differences++;
+  }
+  return differences?650+candidate.length-differences:0;
+}
 function findPlacementVervalMatch(records){
   const candidate=normalizeKopdesName(getPlacementKopdesSearchName());
   if(!candidate||candidate.length<5)return null;
   const scored=(records||[]).map(record=>{
     const name=normalizeKopdesName(record.name);if(!name)return {record,score:0};
-    let score=0;if(name===candidate)score=1000;else if(name.includes(candidate))score=900+candidate.length;else if(candidate.includes(name)&&name.length>=6)score=700+name.length;
+    let score=0;
+    if(name===candidate)score=1000;
+    else if(name.includes(candidate))score=900+candidate.length;
+    else if(candidate.includes(name)&&name.length>=6)score=700+name.length;
+    else score=fuzzyKopdesNameScore(candidate,name);
     return {record,score};
   }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
   if(!scored.length)return null;

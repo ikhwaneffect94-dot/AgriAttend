@@ -189,6 +189,11 @@ public final class SimkopdesVervalActivity extends Activity {
           const district = %s;
           const assignment = %s;
           const passcode = %s;
+          const assignmentParts = String(assignment || '').split(/[_|,;]+/).map(value=>value.trim()).filter(value=>value && !/^(kdkmp|kdmp)$/i.test(value));
+          let assignmentSearchName = '';
+          if(/^\\s*(?:kdkmp|kdmp)[_|]/i.test(String(assignment||'')) && assignmentParts.length>=3) assignmentSearchName=assignmentParts[assignmentParts.length-1];
+          else assignmentSearchName=String(assignment||'').replace(/^\\s*(?:kdkmp|kdmp)\\s*[:_|-]?\\s*/i,'');
+          assignmentSearchName=assignmentSearchName.replace(/^\\s*(?:desa|kelurahan)\\s+/i,'').replace(/[_|,;]+/g,' ').replace(/\\s+/g,' ').trim();
           const bridge = window.AgriVervalBridge;
           const norm = value => String(value || '').normalize('NFD')
             .replace(/[\\u0300-\\u036f]/g,'').toLowerCase()
@@ -336,10 +341,11 @@ public final class SimkopdesVervalActivity extends Activity {
 
             function categoryControls(){
               const found=new Map();
-              const selector='[role=tab],button,[role=button],a,li,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item,[data-value]';
+              const selector='[role=tab],button,[role=button],a,li,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item,[data-value],[role=option],[role=menuitem]';
               for(const element of Array.from(document.querySelectorAll(selector)).filter(visible)){
-                const label=categoryName(textOf(element));
-                if(!label || textOf(element).length>90) continue;
+                const rawLabel=[textOf(element),element.getAttribute('aria-label'),element.getAttribute('title'),element.getAttribute('data-value')].filter(Boolean).join(' ');
+                const label=categoryName(rawLabel);
+                if(!label || textOf(element).length>120) continue;
                 const clickTarget=element.closest('button,[role=tab],[role=button],a,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item')||element;
                 const key='node:'+label;
                 if(!found.has(key)) found.set(key,{kind:'node',label:label,text:textOf(element)});
@@ -358,7 +364,7 @@ public final class SimkopdesVervalActivity extends Activity {
 
             function activeCategoryLabel(){
               const active=document.querySelector('[role=tab][aria-selected=true],.ant-tabs-tab-active,.ant-radio-button-wrapper-checked,.ant-segmented-item-selected,[aria-current=page]');
-              return active?categoryName(textOf(active)):'';
+              return active?categoryName([textOf(active),active.getAttribute('aria-label'),active.getAttribute('title')].filter(Boolean).join(' ')):'';
             }
 
             function extractCurrentRows(categoryLabel){
@@ -432,6 +438,90 @@ public final class SimkopdesVervalActivity extends Activity {
               return {records:records,tableCount:tables.length};
             }
 
+            function currentTableSignature(categoryLabel=''){
+              return extractCurrentRows(categoryLabel).records.map(row=>norm(row.name)+'|'+norm(row.sourceText)).join('¦').slice(0,16000);
+            }
+
+            async function waitForTableReady(maxWait=9000){
+              const deadline=Date.now()+maxWait;
+              let previous='',stable=0,lastCount=0;
+              while(Date.now()<deadline){
+                const extracted=extractCurrentRows('');
+                const signature=extracted.records.map(row=>norm(row.name)+'|'+norm(row.sourceText)).join('¦').slice(0,16000);
+                if(signature && signature===previous) stable++;
+                else stable=0;
+                previous=signature;
+                lastCount=extracted.records.length;
+                if(signature && stable>=2) return {ready:true,rowCount:lastCount,tableCount:extracted.tableCount};
+                await sleep(300);
+              }
+              const result=extractCurrentRows('');
+              return {ready:result.records.length>0,rowCount:result.records.length||lastCount,tableCount:result.tableCount};
+            }
+
+            function findAssignmentSearchInput(){
+              const candidates=Array.from(document.querySelectorAll('input:not([type=password]),textarea')).filter(visible);
+              const scored=candidates.map(element=>{
+                const meta=[element.type,element.id,element.name,element.placeholder,element.getAttribute('aria-label'),element.getAttribute('title'),element.parentElement?.innerText].join(' ').toLowerCase();
+                if(/passcode|password|pin|provinsi|province|kabupaten|kecamatan|desa|kelurahan|wilayah/i.test(meta)) return {element,score:0};
+                let score=0;
+                if(String(element.type||'').toLowerCase()==='search') score+=8;
+                if(/nama koperasi|nama kopdes|kdkmp|kopdes/i.test(meta)) score+=10;
+                if(/search|cari|pencarian|filter/i.test(meta)) score+=6;
+                return {element,score};
+              }).filter(item=>item.score>0).sort((a,b)=>b.score-a.score);
+              return scored[0]?.element||null;
+            }
+
+            async function applyAssignmentSearch(){
+              if(!assignmentSearchName) return {applied:false,query:''};
+              const input=findAssignmentSearchInput();
+              if(!input) return {applied:false,query:''};
+              const proto=input.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
+              const setter=Object.getOwnPropertyDescriptor(proto,'value').set;
+              const queries=[assignmentSearchName];
+              const firstToken=assignmentSearchName.split(/\\s+/).filter(Boolean)[0]||'';
+              if(firstToken && norm(firstToken)!==norm(assignmentSearchName)) queries.push(firstToken);
+              let lastQuery='';
+              for(const query of queries){
+                lastQuery=query;
+                setter.call(input,query);
+                input.dispatchEvent(new Event('input',{bubbles:true}));
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                input.dispatchEvent(new KeyboardEvent('keyup',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));
+                input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));
+                await sleep(1500);
+                const rows=extractCurrentRows('');
+                const queryNorm=norm(query);
+                if(rows.records.some(row=>norm(row.name).includes(queryNorm)||norm(row.sourceText).includes(queryNorm)))
+                  return {applied:true,query:query};
+              }
+              return {applied:true,query:lastQuery};
+            }
+
+            function assignedNameMatches(rowName){
+              const wanted=norm(assignmentSearchName).split(' ').filter(Boolean);
+              const found=norm(rowName).split(' ').filter(Boolean);
+              if(wanted.length!==found.length||!wanted.length)return false;
+              let changed=0;
+              for(let i=0;i<wanted.length;i++){
+                if(wanted[i]===found[i])continue;
+                if(Math.min(wanted[i].length,found[i].length)<6)return false;
+                let previous=Array.from({length:found[i].length+1},(_,j)=>j);
+                for(let x=1;x<=wanted[i].length;x++){
+                  const current=[x];
+                  for(let y=1;y<=found[i].length;y++){
+                    const cost=wanted[i][x-1]===found[i][y-1]?0:1;
+                    current[y]=Math.min(current[y-1]+1,previous[y]+1,previous[y-1]+cost);
+                  }
+                  previous=current;
+                }
+                if(previous[found[i].length]>1)return false;
+                changed++;
+              }
+              return changed<=1;
+            }
+
             function getNextPageControl(){
               const candidates=Array.from(document.querySelectorAll('button,a,[role=button],li')).filter(visible);
               return candidates.find(element=>{
@@ -444,7 +534,7 @@ public final class SimkopdesVervalActivity extends Activity {
               })||null;
             }
 
-            async function waitForTableChange(previousSignature,maxWait=850){
+            async function waitForTableChange(previousSignature,maxWait=4200){
               const deadline=Date.now()+maxWait;
               while(Date.now()<deadline){
                 await sleep(200);
@@ -458,9 +548,13 @@ public final class SimkopdesVervalActivity extends Activity {
               const category=label||activeCategoryLabel()||'Kategori awal';
               const pageSignatures=new Set();
               let pages=0;
-              const maxPagesPerCategory=6;
+              const search=await applyAssignmentSearch();
+              if(search.applied) report('Filter nama: '+search.query+' · '+category+'…');
+              else report('Memeriksa seluruh tabel '+category+'…');
+              await waitForTableReady(4500);
+              const maxPagesPerCategory=12;
               while(pages<maxPagesPerCategory){
-                await sleep(180);
+                await sleep(250);
                 const extracted=extractCurrentRows(category);
                 tableCounts.count=Math.max(tableCounts.count,extracted.tableCount);
                 const signature=extracted.records.map(row=>row.sourceText).join('¦');
@@ -479,7 +573,7 @@ public final class SimkopdesVervalActivity extends Activity {
                 }
                 const before=signature;
                 next.click();
-                if(!await waitForTableChange(before,900)){
+                if(!await waitForTableChange(before,4200)){
                   tableCounts.paginationComplete=false;
                   break;
                 }
@@ -507,9 +601,10 @@ public final class SimkopdesVervalActivity extends Activity {
               const target=Array.from(document.querySelectorAll(selector)).filter(visible)
                 .find(element=>categoryName(textOf(element))===entry.label && textOf(element).length<=90);
               if(!target) return false;
-              const clickTarget=target.closest('button,[role=tab],[role=button],a,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item')||target;
+              const clickTarget=target.closest('button,[role=tab],[role=button],a,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item,[role=option],[role=menuitem]')||target;
               clickTarget.click();
-              await sleep(450);
+              await waitForTableReady(7000);
+              await sleep(350);
               return true;
             }
 
@@ -518,18 +613,24 @@ public final class SimkopdesVervalActivity extends Activity {
             const tableCounts={count:0,paginationComplete:true,pagesByCategory:{}};
             const initialCategory=activeCategoryLabel();
             if(initialCategory) report('Memeriksa kategori awal: '+initialCategory+'…');
-            else report('Membaca tabel awal Verval…');
+            else report('Menunggu tabel Verval siap…');
+            await waitForTableReady(11000);
             await collectCurrentCategory(initialCategory,allRecords,coverage,tableCounts);
             let entries=categoryControls();
+            entries.sort((a,b)=>(a.label==='Non Prioritas'?-1:0)-(b.label==='Non Prioritas'?-1:0));
             const processed=new Set();
             for(let index=0;index<entries.length;index++){
               const entry=entries[index];
               if(processed.has(entry.label)) continue;
-              processed.add(entry.label);
-              report('Memeriksa kategori '+(processed.size)+' dari '+entries.length+': '+entry.label+'…');
+              report('Memeriksa kategori '+(processed.size+1)+' dari '+entries.length+': '+entry.label+'…');
               if(!await activateCategory(entry)) continue;
+              processed.add(entry.label);
               await collectCurrentCategory(entry.label,allRecords,coverage,tableCounts);
-              entries=categoryControls();
+              if(entry.label==='Non Prioritas' && allRecords.some(row=>assignedNameMatches(row.name))){
+                report('Nama penugasan ditemukan di Non Prioritas. Kategori lain dilewati.');
+                break;
+              }
+              entries=categoryControls().sort((a,b)=>(a.label==='Non Prioritas'?-1:0)-(b.label==='Non Prioritas'?-1:0));
             }
 
             // Some portal builds expose category labels as filters in table

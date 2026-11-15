@@ -79,11 +79,15 @@ jobs:
           import textwrap, xml.etree.ElementTree as ET
           ET.parse('app/src/main/AndroidManifest.xml')
           gradle = open('app/build.gradle', encoding='utf-8').read()
-          assert "versionCode 31" in gradle and "versionName '1.7.2'" in gradle
+          assert "versionCode 32" in gradle and "versionName '1.7.3'" in gradle
           native = open('app/src/main/java/id/agriattend/app/SimkopdesVervalActivity.java', encoding='utf-8').read()
           assert native.count("run().catch(error=>") == 1, "Verval automation runner must be declared exactly once"
           assert "webView.setVisibility(View.VISIBLE)" in native
           assert "LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f" in native
+          assert "function applyAssignmentSearch()" in native
+          assert "assignmentSearchName" in native
+          assert "const maxPagesPerCategory=12" in native
+          assert "entries.sort((a,b)=>(a.label==='Non Prioritas'?-1:0)" in native
           marker = 'return String.format(Locale.ROOT, """'
           assert marker in native, 'Verval JavaScript text block not found'
           script = native.split(marker, 1)[1].split('""",', 1)[0]
@@ -94,6 +98,8 @@ jobs:
           assert "function getPlacementKopdesSearchName()" in app
           assert "if(/^(?:kdkmp|kdmp)[_|]/i.test(raw)&&parts.length>=3)" in app
           assert "function getVervalCategoryLabel(record)" in app
+          assert "function levenshteinDistance(a,b)" in app
+          assert "function fuzzyKopdesNameScore(candidate,name)" in app
           assert "Masuk: ${category}" in app
           assert "state.vervalRecords=[matched]" in app and "renderVervalPage();" in app
           assert "state.vervalMatchState='error'" in app
@@ -112,7 +118,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgriAttend-debug-APK-v1.7.2
+          name: AgriAttend-debug-APK-v1.7.3
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
