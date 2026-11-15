@@ -1,16 +1,16 @@
-# AgriAttend Android Ready v1.6.1
+# AgriAttend Android Ready v1.6.2
 
 AgriAttend is an Android companion client for AgriConnect HRIS. Its app shell renders the bundled local PWA. SIMKOPDES Verval is retrieved with direct native HTTPS API requests; it does not open the SIMKOPDES website in a browser or nested WebView.
 
 ## Pantauan Verval
 
-After choosing province and district/city, AgriAttend fetches:
+The Verval dialog detects the assigned province/district from the active AgriConnect placement and preselects it when available. The last confirmed region selection is retained, the user can still change it, and the lookup has a 12-second timeout. If the regional lookup service is unavailable, fallback district lists are provided for Kalimantan Tengah and Kalimantan Selatan. AgriAttend then fetches:
 
 - `cooperative-assets/get-all` for public asset records and the assigned cooperative match.
 - `statistics/asset-verification-validation` for province-level asset verification/construction totals and `verification_detail` categories.
 - `statistics/national/phase-2` for phase-two province × Satgas aggregate rows.
 
-The assignment code is normalized. Example: `KDKMP_Kapuas_Pulau Petak_Teluk Palinget` is matched against the cooperative name while using `Pulau Petak` as the subdistrict hint. Multiple asset rows belonging to one cooperative are consolidated into one card.
+The API response decryptor first validates the AES-CBC/PKCS7 parameters observed in the supplied SIMKOPDES frontend bundle; if they no longer validate, it falls back to scanning public site bundles for updated parameters. All decoded responses are checked against the expected API shape. The assignment code is normalized. Example: `KDKMP_Kapuas_Pulau Petak_Teluk Palinget` is matched against the cooperative name while using `Pulau Petak` as the subdistrict hint. Multiple asset rows belonging to one cooperative are consolidated into one card.
 
 There is an optional advanced account-scoped source:
 
