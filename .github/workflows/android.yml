@@ -91,7 +91,7 @@ jobs:
           assert "chooseRegion(subdistrict,'subdistrict',[p.select,d.select])" in native
           assert "kecamatan|kec" in native
           assert "const name=at(nameIndex);" in native
-          assert "assetCount:Number.isFinite(parsedCount)&&parsedCount>0?parsedCount:null" in native
+          assert "assetCount:Number.isFinite(parsedCount)&&parsedCount>=0?parsedCount:null" in native
           assert "assetCount:Number.isFinite(parsedCount)&&parsedCount>0?parsedCount:1" not in native
           assert "Kecamatan '+subdistrict+' tidak ditemukan" not in native
           assert "if(!wanted || wanted.length<3) return null;" in native
@@ -108,6 +108,9 @@ jobs:
           app = open('app/src/main/assets/app.js', encoding='utf-8').read()
           assert "function armVervalWatchdog()" in app
           assert "function getFriendlyVervalError(result)" in app
+          assert "assetStatusIndex=findIndex(/status data aset|status aset|kondisi aset/)" in native
+          assert "replace(/\\\\s+/g,' ').trim()" in app
+          assert "replace(/\\\\\\\\s+/g,' ').trim()" not in app
           assert "const message=getFriendlyVervalError(result);" in app
           assert "Diagnostik: '+summaries" not in app
           assert "matched.ownership||'Belum tersedia'" in app
