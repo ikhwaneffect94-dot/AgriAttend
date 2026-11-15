@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.7.5';
+const CLIENT_VERSION = '1.7.6';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
@@ -535,6 +535,7 @@ async function refreshProfileData(){
   finally{if(btn){btn.disabled=false;btn.textContent='Muat ulang profil ↻';}}
 }
 function normalizeRegionText(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\b(kabupaten|kab\.?|kota administrasi|kota)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
+function normalizeRegionName(value){return normalizeRegionText(value);}
 function getPlacementKopdes(){
   const sources=[session?.employmentDetail,employmentDetail,session?.profileDetail,profileDetail,session?.profile].filter(Boolean);
   const seen=new Set(),candidates=[];
