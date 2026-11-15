@@ -190,6 +190,26 @@ public class MainActivity extends Activity {
             fileChooserCallback.onReceiveValue(results);
             fileChooserCallback = null;
         }
+        if (requestCode == REQUEST_SIMKOPDES_VERVAL) {
+            JSONObject result;
+            try {
+                String raw = data == null ? "" : data.getStringExtra("verval_result_json");
+                result = raw == null || raw.trim().isEmpty() ? new JSONObject() : new JSONObject(raw);
+                if (!result.has("success")) result.put("success", false);
+                if (!result.has("records")) result.put("records", new org.json.JSONArray());
+                if (resultCode != RESULT_OK && !result.has("message")) {
+                    result.put("message", "Pengambilan data Verval dibatalkan.");
+                }
+            } catch (Exception error) {
+                result = new JSONObject();
+                try {
+                    result.put("success", false);
+                    result.put("message", "Respons mesin Verval tidak dapat dibaca: " + error.getMessage());
+                    result.put("records", new org.json.JSONArray());
+                } catch (Exception ignored) { }
+            }
+            postVervalDirectResult(result);
+        }
     }
 
     @Override
@@ -541,32 +561,6 @@ public class MainActivity extends Activity {
                 postVervalDirectResult(failure);
             }
         });
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQUEST_SIMKOPDES_VERVAL) return;
-        JSONObject result;
-        try {
-            String raw = data == null ? "" : data.getStringExtra("verval_result_json");
-            result = raw == null || raw.trim().isEmpty()
-                    ? new JSONObject()
-                    : new JSONObject(raw);
-            if (!result.has("success")) result.put("success", false);
-            if (!result.has("records")) result.put("records", new org.json.JSONArray());
-            if (resultCode != RESULT_OK && !result.has("message")) {
-                result.put("message", "Pengambilan data Verval dibatalkan.");
-            }
-        } catch (Exception error) {
-            result = new JSONObject();
-            try {
-                result.put("success", false);
-                result.put("message", "Respons mesin Verval tidak dapat dibaca: " + error.getMessage());
-                result.put("records", new org.json.JSONArray());
-            } catch (Exception ignored) { }
-        }
-        postVervalDirectResult(result);
     }
 
     /** Legacy direct API path retained temporarily for compatibility with old saved builds. */
