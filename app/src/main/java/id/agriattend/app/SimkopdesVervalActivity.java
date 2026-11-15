@@ -174,7 +174,7 @@ public final class SimkopdesVervalActivity extends Activity {
         webView.loadUrl(PORTAL_URL);
         webView.postDelayed(() -> {
             if (!completed) fail("Waktu tunggu portal Verval habis sebelum tabel hasil diterima.");
-        }, 60000);
+        }, 180000);
     }
 
     private String buildAutomationScript() {
@@ -309,82 +309,247 @@ public final class SimkopdesVervalActivity extends Activity {
             }
 
             bridge.onPasscodeSubmitted();
-            report('Passcode dikirim. Menunggu tabel hasil Verval…');
-            for(let attempt=0;attempt<40;attempt++){
-              await sleep(500);
-              const tables=Array.from(document.querySelectorAll('table,[role=table]')).filter(visible);
-              const rows=tables.flatMap(table=>Array.from(table.querySelectorAll('tr,[role=row]')));
-              const dataRows=rows.filter(row=>row.querySelector('td,[role=cell]'));
-              if(dataRows.length){
-                const records=[];
-                for(const table of tables){
-                  const rowEls=Array.from(table.querySelectorAll('tr,[role=row]'));
-                  if(rowEls.length<2) continue;
-                  let headerRow=rowEls.find(row=>row.querySelector('th,[role=columnheader]')) || rowEls[0];
-                  const headers=Array.from(headerRow.querySelectorAll('th,td,[role=columnheader]')).map(textOf);
-                  for(const row of rowEls){
-                    if(row===headerRow) continue;
-                    const cells=Array.from(row.querySelectorAll('td,[role=cell]')).map(textOf);
-                    if(!cells.length) continue;
-                    const raw={};
-                    headers.forEach((h,i)=>{if(h)raw[h]=cells[i]||'';});
-                    const find=(pattern)=>{const index=headers.findIndex(h=>pattern.test(norm(h)));return index>=0?cells[index]||'':'';};
-                    const name=find(/nama.*(koperasi|kopdes)|koperasi|kopdes/);
-                    if(!name && !cells.some(Boolean)) continue;
-                    const status=find(/status|hasil|verifikasi|verval|kelayakan/);
-                    const batch=find(/batch|tahap/);
-                    const owner=find(/kepemilikan|pemilik|status.*tanah|hak.*tanah/);
-                    const surveyor=find(/surveyor|enumerator|petugas/);
-                    const latitude=find(/latitude|lintang/);
-                    const longitude=find(/longitude|bujur/);
-                    const coord=find(/koordinat|coordinate|lokasi/);
-                    let lat=latitude?Number(latitude):null, lng=longitude?Number(longitude):null;
-                    if((!Number.isFinite(lat)||!Number.isFinite(lng)) && coord){
-                      const pair=coord.match(/(-?\\d+(?:[.,]\\d+)?)\\s*[,; ]+\\s*(-?\\d+(?:[.,]\\d+)?)/);
-                      if(pair){lat=Number(pair[1].replace(',','.'));lng=Number(pair[2].replace(',','.'));}
-                    }
-                    records.push({
-                      name:name || cells[0] || '',
-                      batch:batch || null,
-                      resultStatus:status || 'Status Verval tersedia pada tabel resmi',
-                      assetCount:1,
-                      latitude:Number.isFinite(lat)?lat:null,
-                      longitude:Number.isFinite(lng)?lng:null,
-                      ownership:owner,
-                      surveyor,
-                      assetStatus:status,
-                      sourceText:cells.join(' | '),
-                      rawFields:raw
-                    });
-                    if(records.length>=500) break;
-                  }
-                  if(records.length>=500) break;
-                }
-                if(records.length){
-                  bridge.onComplete(JSON.stringify({
-                    success:true,records:records,province:province,district:district,
-                    source:'Halaman Verval SIMKOPDES · tabel resmi',
-                    updatedAt:new Date().toISOString(),tableCount:tables.length,
-                    rowCount:records.length
-                  }));
-                  return;
-                }
+            report('Passcode diterima untuk diproses. Memindai Batch 1–4 dan Non Prioritas…');
+
+            const categoryName = label => {
+              const value=String(label||'').replace(/\\s+/g,' ').trim();
+              if(/non[\\s_-]*prioritas/i.test(value)) return 'Non Prioritas';
+              const batch=value.match(/batch\\s*[-:#]?\\s*([1-4])/i);
+              if(batch) return 'Batch '+batch[1];
+              if(/^prioritas$/i.test(value)) return 'Prioritas';
+              return '';
+            };
+            const categoryPattern=/\\bbatch\\s*[-:#]?\\s*[1-4]\\b|non[\\s_-]*prioritas|^prioritas$/i;
+
+            function categoryControls(){
+              const found=new Map();
+              const selector='[role=tab],button,[role=button],a,li,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item,[data-value]';
+              for(const element of Array.from(document.querySelectorAll(selector)).filter(visible)){
+                const label=categoryName(textOf(element));
+                if(!label || textOf(element).length>90) continue;
+                const clickTarget=element.closest('button,[role=tab],[role=button],a,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item')||element;
+                const key='node:'+label;
+                if(!found.has(key)) found.set(key,{kind:'node',label:label,text:textOf(element)});
               }
-              const pageText=(document.body&&document.body.innerText||'').replace(/\\s+/g,' ');
-              if(/passcode|passkey|kode akses|kata sandi/i.test(pageText) && /salah|tidak valid|invalid|ditolak/i.test(pageText)){
-                bridge.onComplete(JSON.stringify({success:false,message:'Passcode Verval tidak diterima oleh SIMKOPDES.',diagnostics:snapshot()}));
-                return;
-              }
-              if(/akses ditolak|forbidden|unauthorized|tidak memiliki akses/i.test(pageText)){
-                bridge.onComplete(JSON.stringify({success:false,message:'SIMKOPDES menolak akses setelah passcode dikirim.',diagnostics:snapshot()}));
-                return;
-              }
+              const selects=visibleSelects();
+              selects.forEach((select,index)=>{
+                Array.from(select.options).forEach(option=>{
+                  const label=categoryName(option.textContent);
+                  if(!label) return;
+                  const key='select:'+index+':'+label;
+                  if(!found.has(key)) found.set(key,{kind:'select',selectIndex:index,label:label,optionText:option.textContent.trim()});
+                });
+              });
+              return Array.from(found.values());
             }
+
+            function activeCategoryLabel(){
+              const active=document.querySelector('[role=tab][aria-selected=true],.ant-tabs-tab-active,.ant-radio-button-wrapper-checked,.ant-segmented-item-selected,[aria-current=page]');
+              return active?categoryName(textOf(active)):'';
+            }
+
+            function extractCurrentRows(categoryLabel){
+              const tables=Array.from(document.querySelectorAll('table,[role=table]')).filter(visible);
+              const records=[];
+              const seenRows=new Set();
+              for(const table of tables){
+                const rowEls=Array.from(table.querySelectorAll('tr,[role=row]'));
+                if(rowEls.length<2) continue;
+                const headerRow=rowEls.find(row=>row.querySelector('th,[role=columnheader]')) || rowEls[0];
+                const headers=Array.from(headerRow.querySelectorAll('th,td,[role=columnheader]')).map(textOf);
+                const headerNorm=headers.map(norm);
+                const findIndex=pattern=>headerNorm.findIndex(header=>pattern.test(header));
+                const nameIndex=findIndex(/nama.*(koperasi|kopdes|kdkmp|kdmp)|nama koperasi|nama kopdes|koperasi|kopdes|kdkmp|kdmp/);
+                const statusIndex=findIndex(/status|hasil|verifikasi|verval|kelayakan/);
+                const batchIndex=findIndex(/batch|tahap/);
+                const categoryIndex=findIndex(/prioritas|kategori|kelompok/);
+                const ownerIndex=findIndex(/kepemilikan|pemilik|status tanah|hak tanah/);
+                const surveyorIndex=findIndex(/surveyor|enumerator|petugas/);
+                const latitudeIndex=findIndex(/latitude|lintang/);
+                const longitudeIndex=findIndex(/longitude|bujur/);
+                const coordinateIndex=findIndex(/koordinat|coordinate|lokasi/);
+                const countIndex=findIndex(/jumlah bidang|jumlah aset|bidang aset|total bidang/);
+                for(const row of rowEls){
+                  if(row===headerRow) continue;
+                  const cells=Array.from(row.querySelectorAll('td,[role=cell]')).map(textOf);
+                  if(!cells.length || !cells.some(Boolean)) continue;
+                  const raw={};
+                  headers.forEach((header,index)=>{if(header)raw[header]=cells[index]||'';});
+                  const at=index=>index>=0?(cells[index]||''):'';
+                  const name=at(nameIndex)||cells.find((cell,index)=>cell && !/^\\d+$/.test(cell) && index<3)||'';
+                  if(!name) continue;
+                  const tableBatch=at(batchIndex)||categoryLabel||activeCategoryLabel()||'';
+                  const category=at(categoryIndex)||categoryLabel||activeCategoryLabel()||'';
+                  const nonPriority=/non[\\s_-]*prioritas/i.test(category+' '+tableBatch);
+                  const batchMatch=(category+' '+tableBatch).match(/batch\\s*[-:#]?\\s*([1-4])/i);
+                  const batch=nonPriority?'Non Prioritas':(batchMatch?'Batch '+batchMatch[1]:(tableBatch||''));
+                  const countRaw=at(countIndex);
+                  const parsedCount=parseInt(String(countRaw).replace(/[^0-9]/g,''),10);
+                  let lat=latitudeIndex>=0?Number(at(latitudeIndex)):null;
+                  let lng=longitudeIndex>=0?Number(at(longitudeIndex)):null;
+                  const coord=at(coordinateIndex);
+                  if((!Number.isFinite(lat)||!Number.isFinite(lng)) && coord){
+                    const pair=coord.match(/(-?\\d+(?:[.,]\\d+)?)\\s*[,; ]+\\s*(-?\\d+(?:[.,]\\d+)?)/);
+                    if(pair){lat=Number(pair[1].replace(',','.'));lng=Number(pair[2].replace(',','.'));}
+                  }
+                  const sourceText=cells.join(' | ');
+                  const rowKey=[norm(name),batch,norm(sourceText)].join('|');
+                  if(seenRows.has(rowKey)) continue;
+                  seenRows.add(rowKey);
+                  records.push({
+                    name:name,
+                    cooperativeId:at(findIndex(/id koperasi|kode koperasi|nomor koperasi/)),
+                    batch:batch||null,
+                    priorityType:nonPriority?'Non Prioritas':(batchMatch?'Prioritas':''),
+                    category:category||categoryLabel||'',
+                    resultStatus:at(statusIndex)||'Status Verval tersedia pada tabel resmi',
+                    assetCount:Number.isFinite(parsedCount)&&parsedCount>0?parsedCount:1,
+                    latitude:Number.isFinite(lat)?lat:null,
+                    longitude:Number.isFinite(lng)?lng:null,
+                    ownership:at(ownerIndex),
+                    surveyor:at(surveyorIndex),
+                    assetStatus:at(statusIndex),
+                    sourceText:sourceText,
+                    rawFields:raw
+                  });
+                  if(records.length>=5000) break;
+                }
+                if(records.length>=5000) break;
+              }
+              return {records:records,tableCount:tables.length};
+            }
+
+            function getNextPageControl(){
+              const candidates=Array.from(document.querySelectorAll('button,a,[role=button],li')).filter(visible);
+              return candidates.find(element=>{
+                const text=[textOf(element),element.getAttribute('aria-label'),element.getAttribute('title'),String(element.className||'')].join(' ');
+                if(!/(next|selanjutnya|berikutnya|pagination-next|halaman berikut|›|»)/i.test(text)) return false;
+                const disabled=element.disabled || element.getAttribute('aria-disabled')==='true'
+                  || element.classList.contains('disabled') || element.parentElement?.classList.contains('disabled')
+                  || element.closest('li')?.classList.contains('ant-pagination-disabled');
+                return !disabled;
+              })||null;
+            }
+
+            async function waitForTableChange(previousSignature,maxWait=7000){
+              for(let attempt=0;attempt<14;attempt++){
+                await sleep(500);
+                const current=extractCurrentRows('').records.map(row=>row.sourceText).join('¦').slice(0,12000);
+                if(current && current!==previousSignature) return true;
+              }
+              return false;
+            }
+
+            async function collectCurrentCategory(label,allRecords,coverage,tableCounts){
+              const category=label||activeCategoryLabel()||'Kategori awal';
+              const pageSignatures=new Set();
+              let pages=0;
+              while(pages<50){
+                await sleep(350);
+                const extracted=extractCurrentRows(category);
+                tableCounts.count=Math.max(tableCounts.count,extracted.tableCount);
+                const signature=extracted.records.map(row=>row.sourceText).join('¦');
+                const pageKey=category+'|'+signature;
+                if(signature && !pageSignatures.has(pageKey)){
+                  pageSignatures.add(pageKey);
+                  allRecords.push(...extracted.records);
+                }
+                pages++;
+                const next=getNextPageControl();
+                if(!next) break;
+                const before=signature;
+                next.click();
+                if(!await waitForTableChange(before)) break;
+              }
+              if(category && !coverage.includes(category)) coverage.push(category);
+            }
+
+            async function activateCategory(entry){
+              if(entry.kind==='select'){
+                const selects=visibleSelects();
+                const select=selects[entry.selectIndex];
+                if(!select) return false;
+                const option=Array.from(select.options).find(item=>categoryName(item.textContent)===entry.label);
+                if(!option) return false;
+                const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set;
+                setter.call(select,option.value);
+                select.dispatchEvent(new Event('input',{bubbles:true}));
+                select.dispatchEvent(new Event('change',{bubbles:true}));
+                await sleep(1000);
+                return true;
+              }
+              const selector='[role=tab],button,[role=button],a,li,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item';
+              const target=Array.from(document.querySelectorAll(selector)).filter(visible)
+                .find(element=>categoryName(textOf(element))===entry.label && textOf(element).length<=90);
+              if(!target) return false;
+              const clickTarget=target.closest('button,[role=tab],[role=button],a,.ant-tabs-tab,.ant-radio-button-wrapper,.ant-segmented-item')||target;
+              clickTarget.click();
+              await sleep(1000);
+              return true;
+            }
+
+            const allRecords=[];
+            const coverage=[];
+            const tableCounts={count:0};
+            const initialCategory=activeCategoryLabel();
+            await collectCurrentCategory(initialCategory,allRecords,coverage,tableCounts);
+            let entries=categoryControls();
+            const processed=new Set();
+            for(let index=0;index<entries.length;index++){
+              const entry=entries[index];
+              if(processed.has(entry.label)) continue;
+              processed.add(entry.label);
+              report('Memeriksa '+entry.label+'…');
+              if(!await activateCategory(entry)) continue;
+              await collectCurrentCategory(entry.label,allRecords,coverage,tableCounts);
+              entries=categoryControls();
+            }
+
+            // Some portal builds expose category labels as filters in table
+            // headers instead of separate tabs. Preserve the category values
+            // discovered in each row and never stop after the first non-empty table.
+            const observedCategories=Array.from(new Set(allRecords.map(row=>row.batch||row.priorityType||row.category).filter(Boolean)));
+            const hasNonPriority=allRecords.some(row=>/non[\\s_-]*prioritas/i.test([row.batch,row.priorityType,row.category,row.sourceText].join(' ')))
+              || coverage.some(label=>/non[\\s_-]*prioritas/i.test(label));
+            const hasBatchSelection=[1,2,3,4].every(number=>
+              coverage.some(label=>new RegExp('batch\\\\s*'+number,'i').test(label))
+              || allRecords.some(row=>new RegExp('batch\\\\s*'+number,'i').test([row.batch,row.category,row.sourceText].join(' ')))
+            );
+            const tableHasCategoryColumn=allRecords.some(row=>/prioritas|batch/i.test(Object.keys(row.rawFields||{}).join(' ')));
+            const coverageComplete=hasNonPriority&&(hasBatchSelection||coverage.some(label=>/^prioritas$/i.test(label))||tableHasCategoryColumn);
+            const uniqueRows=new Map();
+            for(const row of allRecords){
+              const key=[norm(row.name),row.cooperativeId||'',row.batch||'',norm(row.sourceText)].join('|');
+              if(!uniqueRows.has(key)) uniqueRows.set(key,row);
+            }
+            const records=Array.from(uniqueRows.values());
+            if(records.length){
+              bridge.onComplete(JSON.stringify({
+                success:true,records:records,province:province,district:district,
+                source:'Halaman Verval SIMKOPDES · seluruh kategori yang terbaca',
+                updatedAt:new Date().toISOString(),tableCount:tableCounts.count,
+                rowCount:records.length,coverage:coverage,
+                observedCategories:observedCategories,
+                coverageComplete:coverageComplete,
+                nonPriorityFound:hasNonPriority
+              }));
+              return;
+            }
+
+            const finalSnapshot=snapshot();
             bridge.onComplete(JSON.stringify({
-              success:false,message:'Passcode dan wilayah sudah dikirim, tetapi tabel hasil tidak muncul dalam batas waktu.',
-              diagnostics:snapshot()
+              success:false,
+              message:'Passcode diterima, tetapi data tabel tidak ditemukan pada kategori yang berhasil diperiksa.',
+              diagnostics:finalSnapshot,
+              coverage:coverage,
+              categoryControls:entries.map(entry=>entry.label)
             }));
+            return;
           }
+          run().catch(error=>{
+            bridge.onComplete(JSON.stringify({success:false,message:'Otomasi alur Verval gagal: '+(error.message||error),diagnostics:snapshot()}));
+          });
+        })();
           run().catch(error=>{
             bridge.onComplete(JSON.stringify({success:false,message:'Otomasi alur Verval gagal: '+(error.message||error),diagnostics:snapshot()}));
           });
