@@ -589,7 +589,7 @@ final class SimkopdesPublicApi {
     }
 
     private Object getDecryptedPayload(String endpoint, List<CipherParameters> candidates, String bearerToken) throws Exception {
-        String responseText = httpGet(API + endpoint, bearerToken);
+        String responseText = httpGetWithRetry(API + endpoint, bearerToken);
         JSONObject envelope = new JSONObject(responseText);
         Object data = envelope.opt("data");
         if (data instanceof JSONObject || data instanceof JSONArray) return data;
@@ -744,10 +744,14 @@ final class SimkopdesPublicApi {
     }
 
     private String httpGetWithRetry(String address) throws Exception {
+        return httpGetWithRetry(address, "");
+    }
+
+    private String httpGetWithRetry(String address, String bearerToken) throws Exception {
         Exception last = null;
         for (int attempt = 0; attempt < 4; attempt++) {
             try {
-                return httpGet(address);
+                return httpGet(address, bearerToken);
             } catch (Exception error) {
                 last = error;
                 if (attempt < 3) {
