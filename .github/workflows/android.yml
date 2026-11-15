@@ -115,7 +115,7 @@ jobs:
           assert "function regionDebug(kind,excluded)" in native
           assert "stage:'subdistrict'" in native
           assert "readyState: document.readyState" in native
-          assert "tryCustomOption(target,[control])" in native
+          assert "await waitForCustomOption(target,[control],1200)" in native
           assert "function cleanVervalDisplayText(value,maxLength=180)" in app
           assert "assetStatusIndex=findIndex(/status data aset|status aset|kondisi aset/)" in native
           assert "replace(/\\s+/g,' ').trim()" in app
@@ -124,7 +124,7 @@ jobs:
           assert "Diagnostik: '+summaries" not in app
           assert "cleanVervalDisplayText(matched.ownership,100)||'Belum tersedia'" in app
           assert "matched.ownership||matched.assetStatus" not in app
-          assert "function isGlobalSearchControl(element,meta)" in native
+          assert "function isGlobalSearchControl(element,meta,regionPattern)" in native
           assert "assetCount:Number(x.assetCount||1)" not in app
           assert "function normalizeRegionName(value){return normalizeRegionText(value);}" in app
           assert "function normalizeRegionText(value)" in app
