@@ -74,21 +74,22 @@ final class SimkopdesPublicApi {
         if (candidates.isEmpty()) {
             throw new IllegalStateException("Parameter AES SIMKOPDES tidak ditemukan pada bundle dashboard dan tidak ada parameter cadangan.");
         }
-        CipherParameters workingCipher = discoverWorkingCipher(candidates);
+        String apiBearer = facilitatorBearer == null ? "" : facilitatorBearer.trim();
+        CipherParameters workingCipher = discoverWorkingCipher(candidates, apiBearer);
         List<CipherParameters> parameters = new ArrayList<>();
         if (workingCipher != null) parameters.add(workingCipher);
         else parameters.addAll(candidates);
 
         StringBuilder endpointNotes = new StringBuilder();
-        JSONObject verificationStats = optionalDecryptedObject("/statistics/asset-verification-validation", parameters, endpointNotes);
+        JSONObject verificationStats = optionalDecryptedObject("/statistics/asset-verification-validation", parameters, apiBearer, endpointNotes);
         JSONObject verificationProvince = findVerificationProvince(verificationStats, province);
-        JSONObject phase2Root = optionalDecryptedObject("/statistics/national/phase-2", parameters, endpointNotes);
+        JSONObject phase2Root = optionalDecryptedObject("/statistics/national/phase-2", parameters, apiBearer, endpointNotes);
         JSONArray phase2Rows = findPhase2ProvinceRows(phase2Root, province);
 
         JSONArray records = new JSONArray();
         String assetApiNote = "";
         try {
-            JSONObject tree = getDecrypted("/cooperative-assets/get-all", parameters);
+            JSONObject tree = getDecrypted("/cooperative-assets/get-all", parameters, apiBearer);
             records = extractAssets(tree, province, district, subdistrictHint, target);
         } catch (Exception assetError) {
             assetApiNote = " Data aset individual tidak berhasil ditarik: " + safeMessage(assetError) + ".";
@@ -98,7 +99,7 @@ final class SimkopdesPublicApi {
         String facilitatorNote = "";
         if (facilitatorId > 0 && facilitatorBearer != null && !facilitatorBearer.trim().isEmpty()) {
             try {
-                JSONObject cooperativeTree = getDecrypted("/cooperatives/get-all-nested", parameters);
+                JSONObject cooperativeTree = getDecrypted("/cooperatives/get-all-nested", parameters, apiBearer);
                 long cooperativeId = findCooperativeId(cooperativeTree, province, district, subdistrictHint, target);
                 if (cooperativeId > 0) {
                     Object scoped = getDecryptedPayload(
@@ -151,9 +152,9 @@ final class SimkopdesPublicApi {
         return result;
     }
 
-    private JSONObject optionalDecryptedObject(String endpoint, List<CipherParameters> candidates, StringBuilder notes) {
+    private JSONObject optionalDecryptedObject(String endpoint, List<CipherParameters> candidates, String bearerToken, StringBuilder notes) {
         try {
-            Object payload = getDecryptedPayload(endpoint, candidates, "");
+            Object payload = getDecryptedPayload(endpoint, candidates, bearerToken);
             if (!(payload instanceof JSONObject)) {
                 if (notes != null) notes.append(endpoint).append(": respons bukan objek JSON; ");
                 return new JSONObject();
@@ -181,7 +182,7 @@ final class SimkopdesPublicApi {
      * Statistics routes are optional and are checked only after the two bulk
      * public data routes.
      */
-    private CipherParameters discoverWorkingCipher(List<CipherParameters> candidates) throws Exception {
+    private CipherParameters discoverWorkingCipher(List<CipherParameters> candidates, String bearerToken) throws Exception {
         String[] endpoints = new String[]{
                 "/cooperatives/get-all-nested",
                 "/cooperative-assets/get-all",
@@ -191,7 +192,7 @@ final class SimkopdesPublicApi {
         String lastError = "Tidak ada respons API yang dapat dipakai untuk memvalidasi parameter dekripsi.";
         for (String endpoint : endpoints) {
             try {
-                String responseText = httpGetWithRetry(API + endpoint);
+                String responseText = httpGetWithRetry(API + endpoint, bearerToken);
                 JSONObject envelope = new JSONObject(responseText);
                 Object data = envelope.opt("data");
                 if (data instanceof JSONObject || data instanceof JSONArray) {
@@ -239,10 +240,13 @@ final class SimkopdesPublicApi {
                             + " karakter; " + cryptoProblem + ").";
                 }
             } catch (Exception error) {
-                lastError = safeMessage(error);
+                lastError = endpoint + ": " + safeMessage(error);
             }
         }
-        throw new IllegalStateException("Parameter dekripsi SIMKOPDES belum tervalidasi. " + lastError);
+        throw new IllegalStateException("SIMKOPDES menolak atau belum menerima akses API. " + lastError
+                + (bearerToken == null || bearerToken.trim().isEmpty()
+                ? " Bila endpoint ini sekarang memerlukan autentikasi, simpan Bearer token API SIMKOPDES yang sah pada bagian Akses API Pendamping. Password AgriConnect dan kode halaman Verval bukan Bearer token."
+                : " Periksa apakah Bearer token API SIMKOPDES masih aktif dan memiliki izin baca."));
     }
 
     private boolean isExpectedPayload(String endpoint, Object parsed) {
@@ -578,8 +582,8 @@ final class SimkopdesPublicApi {
         output.add(new CipherParameters(key, iv));
     }
 
-    private JSONObject getDecrypted(String endpoint, List<CipherParameters> candidates) throws Exception {
-        Object value = getDecryptedPayload(endpoint, candidates, "");
+    private JSONObject getDecrypted(String endpoint, List<CipherParameters> candidates, String bearerToken) throws Exception {
+        Object value = getDecryptedPayload(endpoint, candidates, bearerToken);
         if (value instanceof JSONObject) {
             JSONObject object = (JSONObject) value;
             JSONObject nested = object.optJSONObject("data");
@@ -726,8 +730,13 @@ final class SimkopdesPublicApi {
         connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
         connection.setReadTimeout(READ_TIMEOUT_MS);
         connection.setInstanceFollowRedirects(true);
-        connection.setRequestProperty("Accept", "application/json,text/html,*/*");
-        connection.setRequestProperty("User-Agent", "AgriAttend-Android/1.6.2 (direct SIMKOPDES data client)");
+        boolean apiHost = "api.simkopdes.go.id".equals(host);
+        connection.setRequestProperty("Accept", apiHost ? "application/json" : "text/html,application/javascript,*/*");
+        connection.setRequestProperty("User-Agent", "AgriAttend-Android/1.6.4 (SIMKOPDES read-only integration)");
+        if (apiHost) {
+            connection.setRequestProperty("Origin", SITE);
+            connection.setRequestProperty("Referer", SITE + "/pers/dashboard");
+        }
         if (bearerToken != null && !bearerToken.trim().isEmpty()) {
             if (!"api.simkopdes.go.id".equals(host)) throw new SecurityException("Bearer token hanya boleh dikirim ke API SIMKOPDES resmi.");
             connection.setRequestProperty("Authorization", "Bearer " + bearerToken.trim());
@@ -736,7 +745,7 @@ final class SimkopdesPublicApi {
             int status = connection.getResponseCode();
             InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
             String text = readLimited(stream);
-            if (status < 200 || status >= 300) throw new IllegalStateException("SIMKOPDES HTTP " + status + (text.isEmpty() ? "" : ": " + text.substring(0, Math.min(180, text.length()))));
+            if (status < 200 || status >= 300) throw new IllegalStateException("SIMKOPDES HTTP " + status + " pada " + url.getPath() + (status == 403 ? " (Forbidden: server menolak akses API sebelum proses dekripsi)." : "") + (text.isEmpty() ? "" : ": " + text.substring(0, Math.min(180, text.length()))));
             return text;
         } finally {
             connection.disconnect();
