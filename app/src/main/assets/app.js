@@ -794,8 +794,8 @@ function renderVervalPage(){
 function setVervalStatus(message,isError=false){const el=$('#vervalLiveStatus');if(el){el.textContent=message;el.classList.toggle('verval-error',!!isError);}}
 window.__vervalDirectStatus=function(message){setVervalStatus(String(message||'Mengambil data langsung dari SIMKOPDES…'));};
 function getFriendlyVervalError(result){
-  const raw=String(result?.message||'Data Verval tidak berhasil dibaca.').replace(/\\s+/g,' ').trim();
-  if(/diagnostik:|teks halaman:|dropdown:|halaman:\\s*https?:/i.test(raw))return 'Portal SIMKOPDES belum berhasil memuat daftar wilayah atau data aset. Silakan ulangi pemeriksaan.';
+  const raw=String(result?.message||'Data Verval tidak berhasil dibaca.').replace(/\s+/g,' ').trim();
+  if(/diagnostik:|teks halaman:|dropdown:|halaman:\s*https?:/i.test(raw))return 'Portal SIMKOPDES belum berhasil memuat daftar wilayah atau data aset. Silakan ulangi pemeriksaan.';
   if(/kecamatan.*(tidak ditemukan|belum tersedia)|pilihan kecamatan/i.test(raw))return 'Kecamatan penugasan belum muncul pada portal SIMKOPDES. Periksa kembali pilihan provinsi dan kabupaten, lalu coba lagi.';
   if(/kabupaten|kota.*(tidak terdeteksi|tidak ditemukan)|regency/i.test(raw))return 'Pilihan kabupaten/kota belum berhasil dimuat dari portal SIMKOPDES. Periksa kembali wilayah penugasan.';
   if(/passcode|tombol verifikasi|form verifikasi/i.test(raw))return 'Form verifikasi SIMKOPDES belum siap. Data aset belum berhasil ditarik.';
