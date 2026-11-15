@@ -622,7 +622,12 @@ function renderVervalPage(){
   const found=findPlacementVervalMatch(state.vervalRecords),matched=found&&!found.ambiguous?found:null;
   const statusEl=$('#vervalPlacementStatus'),batchEl=$('#vervalPlacementBatch'),resultPanel=$('#vervalPlacementResult');
   if(statusEl){if(matched)statusEl.textContent=matched.resultStatus||'Status pemeriksaan aset tidak terbaca';else if(state.vervalMatchState==='not_found')statusEl.textContent='Data aset individual belum ditemukan';else if(state.vervalMatchState==='ambiguous')statusEl.textContent='Nama cocok dengan lebih dari satu koperasi';else if(state.vervalMatchState==='checking')statusEl.textContent='Sedang menarik data resmi SIMKOPDES…';else statusEl.textContent='Belum diperiksa';}
-  if(batchEl){batchEl.hidden=!matched||!matched.batch;batchEl.textContent=matched?.batch?`Batch ${matched.batch}`:'';}
+  if(batchEl){
+    const label=matched?(matched.priorityType==='Non Prioritas'||/non[\\s_-]*prioritas/i.test(String(matched.batch||''))?'Non Prioritas':
+      (Array.isArray(matched.categories)&&matched.categories.length?matched.categories.join(' · '):(matched.batch||''))):'';
+    batchEl.hidden=!label;
+    batchEl.textContent=label;
+  }
   if(resultPanel){
     resultPanel.hidden=!matched;
     if(matched){
@@ -659,19 +664,62 @@ window.__vervalDirectResult=function(payload){
       ].filter(Boolean).join(' · ').slice(0,1500);
       throw new Error((result?.message||'Data Verval tidak berhasil dibaca.')+(summaries?' Diagnostik: '+summaries:''));
     }
-    const records=(Array.isArray(result.records)?result.records:[]).map(x=>({
-      name:String(x.name||'').trim(),batch:x.batch==null?null:String(x.batch),
-      cooperativeId:x.cooperativeId==null?'':String(x.cooperativeId),assetCount:Number(x.assetCount||1),
+    const sourceRows=(Array.isArray(result.records)?result.records:[]).map(x=>({
+      name:String(x.name||'').trim(),batch:x.batch==null?'':String(x.batch),
+      priorityType:String(x.priorityType||''),category:String(x.category||''),
+      cooperativeId:x.cooperativeId==null?'':String(x.cooperativeId),
+      assetCount:Number(x.assetCount||1),
       resultStatus:String(x.resultStatus||'Status aset tidak tersedia').trim(),
       latitude:x.latitude==null||x.latitude===''?null:Number(x.latitude),
       longitude:x.longitude==null||x.longitude===''?null:Number(x.longitude),
       mapUrl:String(x.mapUrl||''),ownership:String(x.ownership||''),assetStatus:String(x.assetStatus||''),
-      surveyor:String(x.surveyor||''),sourceText:String(x.sourceText||'')
+      surveyor:String(x.surveyor||''),sourceText:String(x.sourceText||''),
+      rawFields:x.rawFields&&typeof x.rawFields==='object'?x.rawFields:{}
     })).filter(x=>x.name);
+    const rowDedupe=new Map();
+    for(const row of sourceRows){
+      const key=[row.cooperativeId||normalizeKopdesName(row.name),row.batch,normalizeKopdesName(row.sourceText)].join('|');
+      if(!rowDedupe.has(key))rowDedupe.set(key,row);
+    }
+    const cooperativeGroups=new Map();
+    for(const row of rowDedupe.values()){
+      const key=row.cooperativeId?'id:'+row.cooperativeId:'name:'+normalizeKopdesName(row.name);
+      if(!cooperativeGroups.has(key)){
+        cooperativeGroups.set(key,{...row,categories:[],sourceRows:1});
+      }else{
+        const group=cooperativeGroups.get(key);
+        group.assetCount+=Number(row.assetCount||1);
+        group.sourceRows++;
+        if(row.batch&&!group.categories.includes(row.batch))group.categories.push(row.batch);
+        if(row.category&&!group.categories.includes(row.category))group.categories.push(row.category);
+        if(row.priorityType&&!group.categories.includes(row.priorityType))group.categories.push(row.priorityType);
+        const statuses=[group.resultStatus,row.resultStatus].filter(Boolean);
+        group.resultStatus=Array.from(new Set(statuses)).join(' · ');
+        if(!group.cooperativeId&&row.cooperativeId)group.cooperativeId=row.cooperativeId;
+        if(group.latitude==null&&row.latitude!=null)group.latitude=row.latitude;
+        if(group.longitude==null&&row.longitude!=null)group.longitude=row.longitude;
+        if(!group.ownership&&row.ownership)group.ownership=row.ownership;
+        if(!group.surveyor&&row.surveyor)group.surveyor=row.surveyor;
+        if(!group.assetStatus&&row.assetStatus)group.assetStatus=row.assetStatus;
+        group.sourceText=[group.sourceText,row.sourceText].filter(Boolean).join(' || ').slice(0,5000);
+      }
+      const group=cooperativeGroups.get(key);
+      for(const label of [row.batch,row.category,row.priorityType].filter(Boolean)){
+        if(!group.categories.includes(label))group.categories.push(label);
+      }
+    }
+    const records=Array.from(cooperativeGroups.values()).map(row=>{
+      const isNonPriority=[row.batch,row.priorityType,row.category,...row.categories].some(value=>/non[\\s_-]*prioritas/i.test(String(value||'')));
+      return {...row,priorityType:isNonPriority?'Non Prioritas':(row.priorityType||'Prioritas')};
+    });
     const verificationStats=result.verificationStats&&typeof result.verificationStats==='object'&&!Array.isArray(result.verificationStats)?result.verificationStats:null;
     const phase2Rows=Array.isArray(result.phase2Rows)?result.phase2Rows:[];
     const hasRegionalStats=!!verificationStats||phase2Rows.length>0;
     if(!records.length&&!hasRegionalStats)throw new Error(result.message||'Data aset maupun statistik wilayah tidak tersedia.');
+    const coverage=Array.isArray(result.coverage)?result.coverage:[];
+    const observedCategories=Array.isArray(result.observedCategories)?result.observedCategories:[];
+    const coverageComplete=result.coverageComplete===true;
+    const coverageLabel=coverage.length?coverage.join(', '):(observedCategories.length?observedCategories.join(', '):'kategori tidak terdeteksi');
     const matched=findPlacementVervalMatch(records);
     state.vervalUpdatedAt=result.updatedAt||new Date().toISOString();
     state.vervalAssignment=result.district||getPlacementRegion().kabupaten;
@@ -681,19 +729,26 @@ window.__vervalDirectResult=function(payload){
     state.vervalStatsSource=String(result.source||'API statistik SIMKOPDES');
     if(!matched){
       state.vervalRecords=[];state.vervalMatchState='not_found';persist();
+      const coverageNote=coverageComplete
+        ?`Kategori yang diperiksa: ${coverageLabel}.`
+        :`Cakupan belum dapat dipastikan. Kategori yang berhasil terdeteksi: ${coverageLabel}. Periksa diagnostik kategori portal.`;
       if(hasRegionalStats){
         const extraNotes=[result.endpointNotes,result.assetApiNote].filter(Boolean).join(' ');
-        setVervalStatus(`Statistik Verval tingkat provinsi berhasil ditarik. Data aset individual ${getPlacementDisplayName()} belum ditemukan. Statistik ini bukan status individual Kopdes. ${extraNotes}`);
-        showToast('Statistik Verval wilayah berhasil diperbarui; aset individual belum ditemukan.');
+        setVervalStatus(`Statistik wilayah berhasil ditarik, tetapi ${getPlacementDisplayName()} belum ditemukan. ${coverageNote} ${extraNotes}`);
+        showToast('Statistik wilayah tersedia; koperasi penugasan belum ditemukan.');
         return;
       }
-      throw new Error(`Data aset publik berhasil dibaca, tetapi nama ${getPlacementDisplayName()} tidak cocok di wilayah yang dipilih.`);
+      throw new Error(`Nama ${getPlacementDisplayName()} belum ditemukan. ${coverageNote}`);
     }
     if(matched.ambiguous){state.vervalRecords=[];state.vervalMatchState='ambiguous';persist();throw new Error('Lebih dari satu aset cocok dengan nama Kopdes penempatan. Hasil tidak dipilih otomatis.');}
     state.vervalRecords=[matched];state.vervalMatchState='matched';persist();
     const note=[result.regionalFacilitatorNote,result.endpointNotes,result.assetApiNote].filter(Boolean).join(' ');
-    setVervalStatus(`Data aset ditemukan: ${matched.name} (${formatVervalNumber(matched.assetCount||1)} bidang aset). Status aset: ${matched.resultStatus}. Statistik verifikasi agregat wilayah juga diperbarui. ${note} Batch 1–4 dan kategori non-prioritas tidak dikarang jika tidak tersedia dari sumber API.`);
-    showToast('Data aset dan statistik Verval berhasil diperbarui.');
+    const coverageNote=coverageComplete
+      ?`Seluruh kategori yang terdeteksi sudah diperiksa: ${coverageLabel}.`
+      :`Perhatian: cakupan kategori belum terkonfirmasi lengkap. Terdeteksi: ${coverageLabel}.`;
+    const categoryList=(matched.categories||[]).filter(Boolean).join(', ');
+    setVervalStatus(`Data ditemukan: ${matched.name} (${formatVervalNumber(matched.assetCount||1)} bidang/baris). Kategori: ${categoryList||matched.priorityType||matched.batch||'tidak teridentifikasi'}. Status: ${matched.resultStatus}. ${coverageNote} ${note}`);
+    showToast(coverageComplete?'Data Verval berhasil diperbarui untuk seluruh kategori.':'Data ditemukan, tetapi cakupan kategori perlu diperiksa.');
   }catch(e){
     setVervalStatus(e.message||'Pengambilan data SIMKOPDES gagal.',true);
     showToast(e.message||'Pengambilan data SIMKOPDES gagal.');
