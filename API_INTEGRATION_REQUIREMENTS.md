@@ -45,6 +45,6 @@ The endpoints above do **not** document per-cooperative Verval batch 1–4 or th
 ## Validation boundaries
 
 - Endpoint and response-field research is based on the independent public SIMKOPDES data extractor and a separate SIMKOPDES integration implementation; it is not an official API contract.
-- Live HTTP/decryption and the current API bundle cannot be confirmed from this build environment. Test on an authorized device/network.
-- Android Gradle build must be confirmed by GitHub Actions or Android Studio.
+- GitHub Actions run `43680394178` successfully built and verified the AgriAttend v1.6.2 debug APK. This confirms source checks and Android packaging, not live SIMKOPDES data correctness.
+- Live HTTP/decryption and matching against a real assigned cooperative still require testing on an authorized Android device/network.
 - The main app shell still uses its bundled local WebView to render AgriAttend UI; the SIMKOPDES function itself makes direct native HTTPS calls and never opens SIMKOPDES in a WebView.
