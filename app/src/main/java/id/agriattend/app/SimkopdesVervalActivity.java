@@ -20,6 +20,8 @@ import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.Locale;
+
 /**
  * Headless SIMKOPDES Verval workflow runner.
  *
@@ -40,6 +42,7 @@ public final class SimkopdesVervalActivity extends Activity {
     private TextView statusText;
     private boolean completed = false;
     private boolean automationStarted = false;
+    private volatile boolean passcodeSubmitted = false;
     private String province = "";
     private String district = "";
     private String assignment = "";
@@ -176,7 +179,7 @@ public final class SimkopdesVervalActivity extends Activity {
 
     private String buildAutomationScript() {
         String passcode = getVervalPasscode();
-        return """
+        return String.format(Locale.ROOT, """
         (async function(){
           const province = %s;
           const district = %s;
@@ -281,6 +284,7 @@ public final class SimkopdesVervalActivity extends Activity {
             passInput.dispatchEvent(new Event('input',{bubbles:true}));
             passInput.dispatchEvent(new Event('change',{bubbles:true}));
             passInput.dispatchEvent(new Event('blur',{bubbles:true}));
+            bridge.onPasscodeSubmitted();
             await sleep(250);
 
             const buttons=Array.from(document.querySelectorAll('button,[role=button],input[type=submit]')).filter(visible);
@@ -385,7 +389,7 @@ public final class SimkopdesVervalActivity extends Activity {
             bridge.onComplete(JSON.stringify({success:false,message:'Otomasi alur Verval gagal: '+(error.message||error),diagnostics:snapshot()}));
           });
         })();
-        """.formatted(
+        """,
                 JSONObject.quote(province),
                 JSONObject.quote(district),
                 JSONObject.quote(assignment),
@@ -401,6 +405,11 @@ public final class SimkopdesVervalActivity extends Activity {
         @JavascriptInterface
         public void onStatus(String message) {
             updateStatus(clean(message));
+        }
+
+        @JavascriptInterface
+        public void onPasscodeSubmitted() {
+            passcodeSubmitted = true;
         }
 
         @JavascriptInterface
@@ -425,6 +434,7 @@ public final class SimkopdesVervalActivity extends Activity {
             result.put("requestedDistrict", district);
             result.put("assignment", assignment);
             result.put("passcodeSubmitted", true);
+            result.put("passcodeSubmitted", passcodeSubmitted);
             Intent data = new Intent();
             data.putExtra("verval_result_json", result.toString());
             setResult(RESULT_OK, data);
