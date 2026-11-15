@@ -1,4 +1,4 @@
-# AgriAttend API Integration Requirements v1.6.2
+# AgriAttend API Integration Requirements v1.6.3
 
 ## AgriConnect
 
@@ -34,7 +34,7 @@ Verval calls are made by the Android native HTTP client. It does not open the SI
 
 ### Encryption discovery
 
-The public API uses an encrypted `data` envelope. AgriAttend first tries the AES-CBC/PKCS7 parameter pair observed in the supplied SIMKOPDES frontend bundle (SHA-256 of the secret as the AES-256 key and UTF-8 IV), and validates it against the smallest available statistics response before trusting it. If that pair no longer validates, it falls back to scanning public SIMKOPDES JavaScript bundles for rotated parameters. If the current site changes the cipher/protocol, the app reports the failure; it must not synthesize statuses.
+The public API uses an encrypted `data` envelope. AgriAttend follows the public extractor's discovery flow: it fetches `/pers/dashboard`, reads its `/_next/static/chunks/*.js` entries, and extracts the arguments to the `.C)(payload, secret, iv)` decrypt call. The AES-256 key is SHA-256(secret), the IV is the UTF-8 IV string, and ciphertext is decrypted as AES-CBC/NoPadding followed by strict PKCS7 removal. The candidate is validated first against `/cooperatives/get-all-nested` (`grouped[]`) before loading `/cooperative-assets/get-all`. The previously observed uploaded-bundle key is retained only as a last fallback. Public API GETs use four bounded attempts with a short backoff.
 
 The Verval region picker preselects the province/district inferred from the active AgriConnect placement and restores the user's last confirmed selection when reopening the dialog. The province/district list remains editable, has a bounded 12-second network lookup, and includes local fallback lists for Kalimantan Tengah and Kalimantan Selatan.
 
@@ -45,6 +45,6 @@ The endpoints above do **not** document per-cooperative Verval batch 1–4 or th
 ## Validation boundaries
 
 - Endpoint and response-field research is based on the independent public SIMKOPDES data extractor and a separate SIMKOPDES integration implementation; it is not an official API contract.
-- GitHub Actions run `43680394178` successfully built and verified the AgriAttend v1.6.2 debug APK. This confirms source checks and Android packaging, not live SIMKOPDES data correctness.
+- GitHub Actions run `43680394178` successfully built and verified the AgriAttend v1.6.3 debug APK. This confirms source checks and Android packaging, not live SIMKOPDES data correctness.
 - Live HTTP/decryption and matching against a real assigned cooperative still require testing on an authorized Android device/network.
 - The main app shell still uses its bundled local WebView to render AgriAttend UI; the SIMKOPDES function itself makes direct native HTTPS calls and never opens SIMKOPDES in a WebView.
