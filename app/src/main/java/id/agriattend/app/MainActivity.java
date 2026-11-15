@@ -504,10 +504,23 @@ public class MainActivity extends Activity {
         });
     }
 
-    /** Fetch public SIMKOPDES asset-verification data through HTTPS API calls.
-     * No nested WebView/browser is created. The public API currently does not
-     * expose the Verval batch 1-4 field or the protected-page non-priority flag.
+    /** Open the real SIMKOPDES Verval page in an in-app WebView.
+     * Province, district, passcode validation, and result tables are handled
+     * by the official portal rather than guessed API calls in AgriAttend.
      */
+    private void openSimkopdesVervalPortal() {
+        runOnUiThread(() -> {
+            try {
+                startActivity(new Intent(MainActivity.this, SimkopdesVervalActivity.class));
+            } catch (Exception error) {
+                Toast.makeText(MainActivity.this,
+                        "Portal Verval SIMKOPDES tidak dapat dibuka: " + error.getMessage(),
+                        Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    /** Legacy direct API path retained temporarily for compatibility with old saved builds. */
     private void fetchVervalDirect(String province, String district, String assignmentCode) {
         String provinceName = province == null ? "" : province.trim();
         String districtName = district == null ? "" : district.trim();
@@ -600,6 +613,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void clearSecureSession() {
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(SESSION_KEY).remove(API_HOST_KEY).apply();
+        }
+
+        @JavascriptInterface
+        public void openSimkopdesVervalPortal() {
+            MainActivity.this.openSimkopdesVervalPortal();
         }
 
         @JavascriptInterface
