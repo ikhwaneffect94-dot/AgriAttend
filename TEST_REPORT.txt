@@ -1,24 +1,20 @@
-AgriAttend v1.6.7 test report
+AgriAttend v1.6.8 test report
 
-Source-level changes:
-- Replaced the active Verval button flow with the official SIMKOPDES Verval route embedded in a dedicated Android WebView activity.
-- Added the route: https://simkopdes.go.id/pers/asset/verval?batch_verification=1%2C2%2C3%2C4
-- Official portal now owns province selection, regency/city selection, passcode validation, and result-table rendering.
-- Enabled JavaScript, DOM storage, cookies, and third-party cookies for the official portal's web workflow.
-- Added in-app Back and Reload controls.
-- Removed the old duplicate province/regency dialog and Bearer-token form from the active UI.
-- The passcode is entered on the official site and is not stored, logged, prefilled, or transmitted as an API token by AgriAttend.
-- Cleared stale direct-API Verval summary data when opening the official portal, to avoid displaying failed/partial public data as a protected Verval result.
-- App version: 1.6.7; Android versionCode 26.
+Included source changes:
+- Added a Verval modal with province and regency/city selectors inside AgriAttend.
+- The province list uses the Indonesian province code list; regency/city options load dynamically and have fallback lists for Kalimantan Tengah and Kalimantan Selatan.
+- The native bridge launches a hidden, 1x1 WebView runtime; no official SIMKOPDES page is visually displayed.
+- The runtime attempts province selection, regency/city selection, automatic passcode fill, official submit, and table extraction.
+- Parsed table fields are returned to the AgriAttend Verval callback for cooperative-name matching.
+- Failure diagnostics report safe DOM metadata but do not include input values.
+- The shared passcode is compiled into the APK and is not logged or rendered in the UI.
+- CAPTCHA, login, and denied access are not bypassed.
+- Android versionName 1.6.8, versionCode 27.
 
 Build verification:
-- Pending GitHub Actions run for the 1.6.7 branch.
+- Pending after the duplicate MainActivity activity-result handler was merged into the existing file-selection callback.
 
-Not verified yet:
-- Live SIMKOPDES route navigation from the Android WebView.
-- Whether the current official route accepts WebView access on the target device/network.
-- Passcode acceptance and full table display after user submission.
-- Parsing official table rows back into the compact AgriAttend summary card; this is intentionally not guessed until a successful result page can be inspected.
-
-Important:
-- APK compilation does not prove passcode validation or live data retrieval. User-device testing is still required.
+Not yet verified:
+- Current SIMKOPDES page selectors and passcode form behavior on an actual Android device.
+- Whether the official result table uses native select/HTML table elements or custom widgets requiring selector adjustments.
+- Successful result parsing and match against KDKMP Teluk Palinget.
