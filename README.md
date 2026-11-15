@@ -1,4 +1,4 @@
-# AgriAttend Android Ready v1.6.9
+# AgriAttend Android Ready v1.7.0
 
 AgriAttend is an Android companion client for AgriConnect HRIS.
 
@@ -24,3 +24,8 @@ Authentication, employee profile/assignment, timesheet, attendance, correction/b
 ## Build
 
 GitHub Actions builds :app:assembleDebug and uploads the debug APK artifact.
+
+## v1.7.0 speed and placement targeting
+
+- Verval now reads the province and regency/city directly from the AgriConnect assignment data already shown on the placement card, and starts the hidden SIMKOPDES flow without asking the user to choose them again. Manual selection remains only as a fallback when the profile region fields are missing.
+- Category scanning still checks detected Batch 1–4 and Non Prioritas controls, but limits pagination to six pages per category and uses shorter waits between region selection, category switching, and page changes. The overall WebView workflow timeout is 90 seconds.
