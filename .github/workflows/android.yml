@@ -1,9 +1,9 @@
-name: Build AgriAttend APK
+name: Build AgriAttend APK v1.7.1
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feature/lark-login-foundation]
     paths:
       - 'AgriAttend-Android-Ready-v*.zip'
       - '.github/workflows/android.yml'
@@ -70,6 +70,9 @@ jobs:
           test -f "$PROJECT_DIR/app/src/main/AndroidManifest.xml"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+      - name: Validate JavaScript
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: node --check app/src/main/assets/app.js
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: gradle --no-daemon --stacktrace clean :app:assembleDebug
@@ -81,7 +84,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgriAttend-debug-APK-v1.6.1
+          name: AgriAttend-debug-APK-v1.7.3
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14

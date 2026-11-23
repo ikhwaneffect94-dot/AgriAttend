@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.6.1';
+const CLIENT_VERSION = '1.7.0';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
@@ -71,14 +71,45 @@ function fmtDate(value, opts={day:'2-digit',month:'short',year:'numeric'}){retur
 function fmtTime(value){return new Intl.DateTimeFormat('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(value));}
 function showToast(message){const el=$('#toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),3500);}
 function initials(name){return (name||'IM').trim().split(/\s+/).slice(0,2).map(x=>x[0]?.toUpperCase()||'').join('')||'IM';}
-function clockTick(){const now=new Date();$('#liveClock').textContent=fmtTime(now);$('#liveDay').textContent=fmtDate(now,{weekday:'long',day:'numeric',month:'long',year:'numeric'});$('#todayDate').textContent=fmtDate(now,{weekday:'short',day:'numeric',month:'short'});}
+function clockTick(){const now=new Date();$('#liveClock').textContent=fmtTime(now);$('#liveDay').textContent=fmtDate(now,{weekday:'long',day:'numeric',month:'long',year:'numeric'});$('#todayDate').textContent=fmtDate(now,{weekday:'short',day:'numeric',month:'short'});const larkClock=$('#larkLiveClock');if(larkClock)larkClock.textContent=fmtTime(now);}
+function setLarkLoginMessage(text,kind='info'){
+  const message=$('#larkLoginMessage');
+  if(!message)return;
+  message.textContent=text;
+  message.classList.remove('is-error','is-info','is-success');
+  message.classList.add(kind==='error'?'is-error':kind==='success'?'is-success':'is-info');
+}
+function beginLarkEmailLogin(){
+  const input=$('#larkLoginEmail'),button=$('#beginLarkLogin');
+  if(!input)return;
+  const email=input.value.trim();
+  if(!email){
+    setLarkLoginMessage('Email Lark belum diisi. Masukkan alamat email yang terdaftar, lalu tekan Lanjutkan.','error');
+    input.focus();return;
+  }
+  if(!input.checkValidity()){
+    setLarkLoginMessage('Format email belum benar. Contoh: nama@perusahaan.com. Periksa kembali alamat email Lark.','error');
+    input.focus();return;
+  }
+  setLarkLoginMessage('Format email valid. Alur yang akan dibuka setelah konfigurasi adalah verifikasi kode di Lark, lalu pilih profil Agrinas jika Lark menampilkan beberapa akun untuk email ini. Saat ini layar Lark belum bisa dipanggil karena Custom App, App ID, callback OAuth, dan backend belum tersedia; email ini belum dikirim dan belum membuat sesi login.','info');
+  if(button){button.textContent='Menunggu konfigurasi OAuth Lark';button.setAttribute('aria-describedby','larkLoginMessage larkLoginHelp');}
+}
+
+function renderLarkWorkspace(){
+  const date=$('#larkDate');
+  if(date)date.textContent=fmtDate(new Date(),{year:'numeric',month:'2-digit',day:'2-digit'});
+  const clock=$('#larkLiveClock');if(clock)clock.textContent=fmtTime(new Date());
+  const account=$('#larkAccountName');if(account)account.textContent='Akun Lark belum dihubungkan';
+  const subtitle=$('#larkAccountSubtitle');if(subtitle)subtitle.textContent='Menunggu konfigurasi aplikasi resmi dari administrator';
+  const location=$('#larkGeofenceStatus');if(location)location.textContent='Belum tersedia';
+}
 function route(name){
-  const allowed=['home','attendance','calendar','verval','payslip','profile','correction','history','locations']; if(!allowed.includes(name)) name='home';
+  const allowed=['home','attendance','lark','calendar','verval','payslip','profile','correction','history','locations']; if(!allowed.includes(name)) name='home';
   $$('.page').forEach(p=>p.classList.toggle('active',p.id===`page-${name}`));
   $$('[data-route]').forEach(b=>b.classList.toggle('active',b.dataset.route===name));
-  const labels={home:'Ringkasan',attendance:'Absensi',calendar:'Kalender Absensi',verval:'Pantauan Verval Kopdes',payslip:'Slip Gaji',profile:'Profil Karyawan',correction:'Pengajuan',history:'Riwayat',locations:'Lokasi Kerja'};
+  const labels={home:'Ringkasan',attendance:'Absensi',lark:'Attendance Lark',calendar:'Kalender Absensi',verval:'Pantauan Verval Kopdes',payslip:'Slip Gaji',profile:'Profil Karyawan',correction:'Pengajuan',history:'Riwayat',locations:'Lokasi Kerja'};
   $('#pageCrumb').textContent=labels[name];
-  if(name==='history') renderHistory(); if(name==='locations') renderLocations(); if(name==='verval') renderVervalPage(); if(name==='profile') renderProfilePage(); if(name==='payslip') renderPayslipPage(); if(name==='correction' && session){loadShiftOptions().catch(()=>{});loadOfficialCheckInOutStatuses().catch(e=>showToast('Status pengajuan gagal dimuat: '+readableApiError(e)));} if(name==='calendar' && session) loadCalendarWorkspace(); if(name==='attendance' && session && !companyLocation && !companyLocationResponseReceived && !companyLocationLoading) loadOfficialCompanyLocation().catch(()=>{}); window.scrollTo({top:0,behavior:'smooth'});
+  if(name==='lark') renderLarkWorkspace(); if(name==='history') renderHistory(); if(name==='locations') renderLocations(); if(name==='verval') renderVervalPage(); if(name==='profile') renderProfilePage(); if(name==='payslip') renderPayslipPage(); if(name==='correction' && session){loadShiftOptions().catch(()=>{});loadOfficialCheckInOutStatuses().catch(e=>showToast('Status pengajuan gagal dimuat: '+readableApiError(e)));} if(name==='calendar' && session) loadCalendarWorkspace(); if(name==='attendance' && session && !companyLocation && !companyLocationResponseReceived && !companyLocationLoading) loadOfficialCompanyLocation().catch(()=>{}); window.scrollTo({top:0,behavior:'smooth'});
 }
 function localYmd(date){const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,'0'),d=String(date.getDate()).padStart(2,'0');return `${y}-${m}-${d}`;}
 function unwrapList(value){
@@ -1030,6 +1061,19 @@ function bindEvents(){
   });
   $$('.segment').forEach(btn=>btn.addEventListener('click',()=>{currentType=btn.dataset.attType;setAttendanceType();}));
   $('#refreshGPS').addEventListener('click',()=>getGps().then(()=>showToast('GPS aktual berhasil diperbarui.')).catch(e=>showToast(e.message)));
+  $('#beginLarkLogin').addEventListener('click',beginLarkEmailLogin);
+  $('#larkLoginEmail').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();beginLarkEmailLogin();}});
+  $('#larkCheckGps').addEventListener('click',async()=>{
+    const button=$('#larkCheckGps');button.disabled=true;button.textContent='Mengambil GPS…';
+    try{
+      const gps=await getGps();
+      $('#larkGpsCoordinate').textContent=gps.latitude.toFixed(6)+', '+gps.longitude.toFixed(6);
+      $('#larkGpsAccuracy').textContent='Akurasi: ±'+Math.round(gps.accuracy)+' m · '+fmtTime(gps.capturedAt);
+      $('#larkGeofenceStatus').textContent='Belum dapat divalidasi';
+      showToast('GPS aktual berhasil dibaca. Radius Lark belum tersedia.');
+    }catch(e){showToast(e.message||'GPS gagal dibaca.');}
+    finally{button.disabled=false;button.textContent='Periksa GPS';}
+  });
   $('#recordAttendance').addEventListener('click',recordAttendance);
   $('#unlockPayslip').addEventListener('click',verifyPayslipPin);$('#refreshPayslip').addEventListener('click',refreshPayslip);
   $('#payslipPin').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();verifyPayslipPin();}});
