@@ -1,4 +1,4 @@
-# AgriAttend Android Ready v1.7.2
+# AgriAttend Android Ready v1.7.3
 
 AgriAttend is an Android companion client for AgriConnect HRIS. Its app shell renders the bundled local PWA. SIMKOPDES Verval is retrieved with direct native HTTPS API requests; it does not open the SIMKOPDES website in a browser or nested WebView.
 
@@ -6,7 +6,7 @@ AgriAttend is an Android companion client for AgriConnect HRIS. Its app shell re
 
 A new Lark Attendance page follows the visible Attendance and Requests workflow from the user-provided Lark screenshots. The sign-in screen now has an email-first Lark entry for the registered Lark email; it validates format locally and is explicitly awaiting the official OAuth handoff configuration. It includes a read-only current-device GPS check and a reference label for KDKMP Teluk Palinget. It does not spoof device coordinates or bypass the tenant geofence. The Lark sign-in and clock-in/out controls remain disabled until an administrator-approved Custom App, OAuth backend, identity mapping, and Attendance API contract are configured and validated. Existing AgriConnect login and attendance remain unchanged.
 
-See `LARK_INTEGRATION_REQUIREMENTS.md` and `LARK_ATTENDANCE_UI_SPEC.md` for prerequisites and implementation boundaries.
+See `LARK_INTEGRATION_REQUIREMENTS.md`, `LARK_ATTENDANCE_UI_SPEC.md`, and `LARK_MULTI_PROFILE_IMPLEMENTATION.md` for the multi-account login, tenant validation, and attendance API boundaries.
 
 ## Pantauan Verval
 
