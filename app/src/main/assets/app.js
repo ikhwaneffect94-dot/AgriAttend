@@ -72,14 +72,29 @@ function fmtTime(value){return new Intl.DateTimeFormat('id-ID',{hour:'2-digit',m
 function showToast(message){const el=$('#toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),3500);}
 function initials(name){return (name||'IM').trim().split(/\s+/).slice(0,2).map(x=>x[0]?.toUpperCase()||'').join('')||'IM';}
 function clockTick(){const now=new Date();$('#liveClock').textContent=fmtTime(now);$('#liveDay').textContent=fmtDate(now,{weekday:'long',day:'numeric',month:'long',year:'numeric'});$('#todayDate').textContent=fmtDate(now,{weekday:'short',day:'numeric',month:'short'});const larkClock=$('#larkLiveClock');if(larkClock)larkClock.textContent=fmtTime(now);}
-function beginLarkEmailLogin(){
-  const input=$('#larkLoginEmail'),message=$('#larkLoginMessage');
-  if(!input||!message)return;
-  const email=input.value.trim();
-  if(!email){message.textContent='Masukkan email yang terdaftar pada akun Lark.';input.focus();return;}
-  if(!input.checkValidity()){message.textContent='Format email belum valid. Periksa kembali alamat email Lark.';input.focus();return;}
-  message.textContent='Format email valid. Untuk mengautentikasi akun dan mendapatkan identitas Lark, integrasi OAuth tenant masih memerlukan Custom App, App ID, callback HTTPS, dan backend resmi. Email ini belum dikirim atau disimpan.';
+function setLarkLoginMessage(text,kind='info'){
+  const message=$('#larkLoginMessage');
+  if(!message)return;
+  message.textContent=text;
+  message.classList.remove('is-error','is-info','is-success');
+  message.classList.add(kind==='error'?'is-error':kind==='success'?'is-success':'is-info');
 }
+function beginLarkEmailLogin(){
+  const input=$('#larkLoginEmail'),button=$('#beginLarkLogin');
+  if(!input)return;
+  const email=input.value.trim();
+  if(!email){
+    setLarkLoginMessage('Email Lark belum diisi. Masukkan alamat email yang terdaftar, lalu tekan Lanjutkan.','error');
+    input.focus();return;
+  }
+  if(!input.checkValidity()){
+    setLarkLoginMessage('Format email belum benar. Contoh: nama@perusahaan.com. Periksa kembali alamat email Lark.','error');
+    input.focus();return;
+  }
+  setLarkLoginMessage('Email valid, tetapi login belum bisa diteruskan. Integrasi Lark belum memiliki App ID, callback OAuth, dan backend resmi. Karena itu, layar verifikasi/password Lark belum dapat dibuka. Email ini belum dikirim ke server.','info');
+  if(button){button.textContent='Menunggu konfigurasi OAuth Lark';button.setAttribute('aria-describedby','larkLoginMessage larkLoginHelp');}
+}
+
 function renderLarkWorkspace(){
   const date=$('#larkDate');
   if(date)date.textContent=fmtDate(new Date(),{year:'numeric',month:'2-digit',day:'2-digit'});
@@ -1047,6 +1062,7 @@ function bindEvents(){
   $$('.segment').forEach(btn=>btn.addEventListener('click',()=>{currentType=btn.dataset.attType;setAttendanceType();}));
   $('#refreshGPS').addEventListener('click',()=>getGps().then(()=>showToast('GPS aktual berhasil diperbarui.')).catch(e=>showToast(e.message)));
   $('#beginLarkLogin').addEventListener('click',beginLarkEmailLogin);
+  $('#larkLoginEmail').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();beginLarkEmailLogin();}});
   $('#larkCheckGps').addEventListener('click',async()=>{
     const button=$('#larkCheckGps');button.disabled=true;button.textContent='Mengambil GPS…';
     try{
