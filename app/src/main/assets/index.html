@@ -32,7 +32,7 @@
           <div class="field-block"><label for="larkLoginEmail">Email Lark</label><input id="larkLoginEmail" type="email" inputmode="email" autocomplete="email" maxlength="254" placeholder="nama@perusahaan.com" /></div>
           <button class="outline-btn full lark-login-placeholder" id="beginLarkLogin" type="button">Lanjutkan dengan Lark <span>→</span></button>
           <div class="lark-auth-message" id="larkLoginMessage" role="status" aria-live="polite">Masukkan email Lark, lalu tekan Lanjutkan. Aplikasi akan menampilkan status prosesnya di sini.</div>
-          <small class="lark-auth-help" id="larkLoginHelp">Setelah integrasi OAuth disiapkan, verifikasi akan dibuka di halaman/SDK resmi Lark. Lark dapat meminta kode email atau menawarkan verifikasi password; AgriAttend tidak mengumpulkan password Lark.</small>
+          <small class="lark-auth-help" id="larkLoginHelp">Setelah login resmi dibuka, masukkan kode verifikasi di Lark. Jika muncul pilihan beberapa akun untuk email ini, pilih profil Agrinas. AgriAttend akan memeriksa identitas tenant yang dikembalikan; profil utama yang bukan tenant Agrinas tidak akan dipakai untuk Attendance.</small>
         </section>
       </form>
       <div class="auth-message" id="authMessage" role="status"></div>
@@ -97,11 +97,11 @@
         <div class="page-title-row"><div><div class="eyebrow">LARK / ATTENDANCE</div><h1>Attendance Lark</h1><p class="subhead">Tampilan pendamping untuk absensi dan pengajuan Lark · <span id="larkDate">—</span></p></div><span class="lark-connection-pill"><i></i> Belum terhubung</span></div>
         <article class="lark-notice">
           <span class="lark-notice-icon">i</span>
-          <div><b>Integrasi Lark belum aktif</b><p>Halaman dan alur sudah disiapkan. Email Lark digunakan sebagai identitas awal. Autentikasi diteruskan melalui OAuth resmi setelah Custom App, callback, dan backend disiapkan administrator. Tidak ada absensi yang dikirim dari halaman ini saat ini.</p></div>
+          <div><b>Integrasi Lark belum aktif</b><p>Urutan yang ditargetkan: email Lark → verifikasi OTP di Lark → pilih profil Agrinas jika beberapa akun muncul → verifikasi tenant Agrinas → Attendance. Saat ini Custom App, callback OAuth, dan backend tenant belum dikonfigurasi, sehingga login dan pengiriman absensi belum aktif.</p></div>
         </article>
         <article class="lark-profile-card">
           <div class="lark-avatar">L</div>
-          <div class="lark-profile-copy"><b id="larkAccountName">Akun Lark belum dihubungkan</b><span id="larkAccountSubtitle">Login Lark menunggu konfigurasi tenant</span></div>
+          <div class="lark-profile-copy"><b id="larkAccountName">Akun Lark belum dihubungkan</b><span id="larkAccountSubtitle">Profil Agrinas baru ditampilkan setelah tenant_key diverifikasi</span></div>
           <button class="text-btn" type="button" disabled>Rules</button>
         </article>
         <div class="lark-work-summary">
