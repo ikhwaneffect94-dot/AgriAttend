@@ -1,4 +1,4 @@
-# AgriAttend Android Ready v1.6.1
+# AgriAttend Android Ready v1.6.2
 
 AgriAttend is an Android companion client for AgriConnect HRIS. Its app shell renders the bundled local PWA. SIMKOPDES Verval is retrieved with direct native HTTPS API requests; it does not open the SIMKOPDES website in a browser or nested WebView.
 
@@ -19,6 +19,13 @@ There is an optional advanced account-scoped source:
 ### Important limitation
 
 Current documented public endpoints do not expose individual Verval batch 1–4 or the protected Verval page's non-priority category. The app therefore displays asset statuses and province-level verification statistics separately; it does not infer batch/non-priority from those fields.
+
+## Backdate and photo picker v1.6.2
+
+- The attendance photo selector opens the Android system Galeri/File picker; it no longer forces the front camera.
+- Backdate correction remains a formal AgriConnect request and is not a direct edit of a completed attendance record.
+- The form accepts image/PDF evidence, previews selected filenames and sizes, validates each file below 5 MB, and rejects future date/time entries.
+- A successful local status is recorded only after the tenant endpoint responds successfully. HR approval remains a separate server workflow.
 
 ## Build
 
