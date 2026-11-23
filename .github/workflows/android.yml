@@ -3,7 +3,7 @@ name: Build AgriAttend APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feature/lark-login-foundation]
     paths:
       - 'AgriAttend-Android-Ready-v*.zip'
       - '.github/workflows/android.yml'
