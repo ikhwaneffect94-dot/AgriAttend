@@ -33,6 +33,53 @@ Menambahkan akun Lark sebagai jalur login kedua di AgriAttend tanpa merusak alur
 - Validasi geofence, foto, Wi-Fi/BSSID, face recognition, offsite attendance, dan aturan jadwal harus mengikuti konfigurasi tenant. Aplikasi tidak boleh memalsukan koordinat, waktu, perangkat, atau status kehadiran.
 - Ketika server Lark sedang overload, aplikasi alternatif tetap bergantung pada layanan Lark. Antrean lokal hanya aman digunakan untuk menyimpan draf/permintaan yang belum dikirim; jangan mengaku absensi sudah tercatat sampai server mengonfirmasi.
 
+
+## Lark Attendance correction / backdate (补卡)
+
+This is separate from the existing AgriConnect backdate request. The Lark workflow is an Attendance correction request (補卡 / missed-punch correction), not a direct edit of an already approved attendance row.
+
+### Employee workflow in Lark
+
+When the tenant enables corrections for the employee's attendance group, the employee can submit a correction from:
+- Attendance home: choose the affected date → Resolve → Correction Request.
+- Attendance → Requests → Correction.
+- A missed-punch bot notification, when the tenant has enabled missed-punch notifications.
+- Personal Reports → affected date → Resolve → Correction Request.
+
+The request includes the corrected date/time and a reason. The attendance group owner/approver reviews it; once approved, Lark updates the corresponding attendance record. Whether corrections are available, the allowed date window, and monthly correction count are tenant rules. AgriAttend must display server-provided eligibility and must not fabricate or bypass those limits.
+
+### Relevant Lark OpenAPI discovered
+
+The public API definitions describe a supported bridge for companies that use Lark Attendance but use a third-party approval system instead of Lark Approval:
+
+1. `POST /open-apis/attendance/v1/user_task_remedys/query_user_allowed_remedys`
+   - Query which punch slots can be corrected for a user on a given `yyyyMMdd` date.
+   - Request includes `user_id`, `remedy_date`, and `employee_type`.
+
+2. `POST /open-apis/attendance/v1/user_task_remedys`
+   - Register a third-party correction approval request in Lark Attendance as pending approval.
+   - Request fields include `user_id`, `remedy_date` (`yyyyMMdd`), `punch_no` (0-based punch sequence), `work_type` (1=in, 2=out; free shift uses 0), `remedy_time` (`yyyy-MM-dd HH:mm`), and `reason`.
+   - It does not itself prove that an employee has been approved or create a final accepted punch. The external approval outcome must be synced separately.
+
+3. `POST /open-apis/attendance/v1/approval_infos/process`
+   - Sync the external approval outcome back to Lark using `approval_type=remedy` and `status=1` (rejected), `2` (approved), or `4` (withdrawn), with the `approval_id` returned by the correction-request creation flow.
+
+4. `POST /open-apis/attendance/v1/user_task_remedys/query`
+   - Read remedy records and their states: 0 pending, 1 rejected, 2 passed, 3 cancelled, 4 withdrawn.
+
+The above remedy APIs are documented as using a **tenant access token**. The API reference states that the record-query endpoint has no matching end-user page function. These interfaces are not a way to reuse a regular employee login cookie or an arbitrary user token.
+
+### Product decision for AgriAttend
+
+- If Agrinas uses Lark's built-in Approval integration, the safest lightweight client path is to keep authentication in the official Lark flow and open the official Attendance correction request page (or an officially supported deep link, if Lark exposes one for this tenant). Do not recreate the private mobile endpoints by copying session cookies.
+- If Agrinas uses a third-party approval workflow, AgriAttend can host a correction form only after an approved integration backend has tenant authorization. The backend must check allowed punch slots, create the pending remedy, run/observe the external approval, then sync the approved/rejected/withdrawn status to Lark.
+- Do not implement the Lark correction action by calling AgriConnect's `/backdate/v1/request` endpoint. It is a different system.
+- A Lark correction UI may collect the date, time, punch sequence, work type, and reason; it must show a pending status until Lark confirms the approval result. No local-only record should be presented as a completed Lark correction.
+
+## APK inspection note
+
+The uploaded Lark Android APK contains Attendance-related components, including GPS/Wi-Fi clock-in and a speed-clock-in feature. The APK alone does not reveal the Agrinas tenant's current attendance-group policy, approval form, allowed correction window, or whether the organization uses Lark Approval or an external approval system. Those are server-side tenant settings, so they cannot be inferred from the APK package alone.
+
 ## Yang dibutuhkan sebelum mengaktifkan login Lark
 
 Minta administrator Lark/Agrinas menyiapkan:
