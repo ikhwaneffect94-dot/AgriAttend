@@ -70,6 +70,9 @@ jobs:
           test -f "$PROJECT_DIR/app/src/main/AndroidManifest.xml"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+      - name: Validate JavaScript
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: node --check app/src/main/assets/app.js
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: gradle --no-daemon --stacktrace clean :app:assembleDebug
