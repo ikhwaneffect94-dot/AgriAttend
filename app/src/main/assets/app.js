@@ -91,7 +91,7 @@ function beginLarkEmailLogin(){
     setLarkLoginMessage('Format email belum benar. Contoh: nama@perusahaan.com. Periksa kembali alamat email Lark.','error');
     input.focus();return;
   }
-  setLarkLoginMessage('Email valid, tetapi login belum bisa diteruskan. Integrasi Lark belum memiliki App ID, callback OAuth, dan backend resmi. Karena itu, layar verifikasi/password Lark belum dapat dibuka. Email ini belum dikirim ke server.','info');
+  setLarkLoginMessage('Format email valid. Alur yang akan dibuka setelah konfigurasi adalah verifikasi kode di Lark, lalu pilih profil Agrinas jika Lark menampilkan beberapa akun untuk email ini. Saat ini layar Lark belum bisa dipanggil karena Custom App, App ID, callback OAuth, dan backend belum tersedia; email ini belum dikirim dan belum membuat sesi login.','info');
   if(button){button.textContent='Menunggu konfigurasi OAuth Lark';button.setAttribute('aria-describedby','larkLoginMessage larkLoginHelp');}
 }
 
