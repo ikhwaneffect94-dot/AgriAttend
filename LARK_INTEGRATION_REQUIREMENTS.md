@@ -13,6 +13,14 @@ Menambahkan akun Lark sebagai jalur login kedua di AgriAttend tanpa merusak alur
 - Belum ada konfigurasi App ID Lark, OAuth callback, backend token broker, atau pemetaan akun AgriConnect ↔ Lark.
 - Karena itu, login AgriConnect yang ada tidak boleh dianggap sebagai login Lark, dan endpoint absensi yang ada tidak boleh dianggap sebagai endpoint Attendance Lark.
 
+## Email-first sign-in experience
+
+- The Android sign-in screen accepts the user's registered Lark email as an identifier.
+- Email input is only a first step; it is not authentication by itself and does not prove that the person controls the mailbox.
+- AgriAttend must not collect or store the Lark password or one-time verification code.
+- After official Lark Custom App/OAuth is configured, the app must hand off to Lark's official Mobile App Login/authorization flow and use the backend callback to verify the resulting authorization.
+- The current UI validates the email format locally but does not send it to a server until the official login flow is configured. It explicitly reports this limitation.
+
 ## Arsitektur yang akan dipakai
 
 1. Pengguna menekan **Masuk dengan Lark** dari AgriAttend.
