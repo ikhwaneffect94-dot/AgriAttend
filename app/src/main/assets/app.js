@@ -1014,7 +1014,8 @@ async function saveCorrection(e){
   for(const file of files){
     if(file.size>=5*1024*1024){showToast(`Ukuran setiap lampiran harus di bawah 5 MB: ${file.name}`);return;}
     const name=(file.name||'').toLowerCase(),mime=(file.type||'').toLowerCase();
-    const isImage=mime.startsWith('image/')||/\\.(jpe?g|png|webp|heic|heif|gif)$/i.test(name);
+    const extension=name.split('.').pop();
+    const isImage=mime.startsWith('image/')||['jpg','jpeg','png','webp','heic','heif','gif'].includes(extension);
     const isPdf=mime==='application/pdf'||name.endsWith('.pdf');
     if(!isImage&&!isPdf){showToast(`Format lampiran hanya gambar atau PDF: ${file.name}`);return;}
   }
