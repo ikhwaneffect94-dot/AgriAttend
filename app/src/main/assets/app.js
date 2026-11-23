@@ -72,6 +72,14 @@ function fmtTime(value){return new Intl.DateTimeFormat('id-ID',{hour:'2-digit',m
 function showToast(message){const el=$('#toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),3500);}
 function initials(name){return (name||'IM').trim().split(/\s+/).slice(0,2).map(x=>x[0]?.toUpperCase()||'').join('')||'IM';}
 function clockTick(){const now=new Date();$('#liveClock').textContent=fmtTime(now);$('#liveDay').textContent=fmtDate(now,{weekday:'long',day:'numeric',month:'long',year:'numeric'});$('#todayDate').textContent=fmtDate(now,{weekday:'short',day:'numeric',month:'short'});const larkClock=$('#larkLiveClock');if(larkClock)larkClock.textContent=fmtTime(now);}
+function beginLarkEmailLogin(){
+  const input=$('#larkLoginEmail'),message=$('#larkLoginMessage');
+  if(!input||!message)return;
+  const email=input.value.trim();
+  if(!email){message.textContent='Masukkan email yang terdaftar pada akun Lark.';input.focus();return;}
+  if(!input.checkValidity()){message.textContent='Format email belum valid. Periksa kembali alamat email Lark.';input.focus();return;}
+  message.textContent='Format email valid. Untuk mengautentikasi akun dan mendapatkan identitas Lark, integrasi OAuth tenant masih memerlukan Custom App, App ID, callback HTTPS, dan backend resmi. Email ini belum dikirim atau disimpan.';
+}
 function renderLarkWorkspace(){
   const date=$('#larkDate');
   if(date)date.textContent=fmtDate(new Date(),{year:'numeric',month:'2-digit',day:'2-digit'});
@@ -1038,6 +1046,7 @@ function bindEvents(){
   });
   $$('.segment').forEach(btn=>btn.addEventListener('click',()=>{currentType=btn.dataset.attType;setAttendanceType();}));
   $('#refreshGPS').addEventListener('click',()=>getGps().then(()=>showToast('GPS aktual berhasil diperbarui.')).catch(e=>showToast(e.message)));
+  $('#beginLarkLogin').addEventListener('click',beginLarkEmailLogin);
   $('#larkCheckGps').addEventListener('click',async()=>{
     const button=$('#larkCheckGps');button.disabled=true;button.textContent='Mengambil GPS…';
     try{
