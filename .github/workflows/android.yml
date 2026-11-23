@@ -1,4 +1,4 @@
-name: Build AgriAttend APK
+name: Build AgriAttend APK v1.7.1
 
 on:
   workflow_dispatch:
@@ -84,7 +84,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgriAttend-debug-APK-v1.6.1
+          name: AgriAttend-debug-APK-v1.7.1
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
