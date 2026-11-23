@@ -31,8 +31,8 @@
           <div class="lark-login-heading"><span class="lark-brand-mark">L</span><div><b id="larkLoginTitle">Login menggunakan email Lark</b><small>Gunakan email yang terdaftar pada akun Lark perusahaan.</small></div></div>
           <div class="field-block"><label for="larkLoginEmail">Email Lark</label><input id="larkLoginEmail" type="email" inputmode="email" autocomplete="email" maxlength="254" placeholder="nama@perusahaan.com" /></div>
           <button class="outline-btn full lark-login-placeholder" id="beginLarkLogin" type="button">Lanjutkan dengan Lark <span>→</span></button>
-          <div class="lark-auth-message" id="larkLoginMessage" role="status">Email digunakan untuk memulai login resmi Lark. Password dan kode verifikasi tidak diminta atau disimpan oleh AgriAttend.</div>
-          <small class="lark-auth-help" id="larkLoginHelp">Autentikasi Lark akan diteruskan ke halaman/SDK resmi setelah Custom App, OAuth callback, dan backend integrasi disiapkan administrator.</small>
+          <div class="lark-auth-message" id="larkLoginMessage" role="status" aria-live="polite">Masukkan email Lark, lalu tekan Lanjutkan. Aplikasi akan menampilkan status prosesnya di sini.</div>
+          <small class="lark-auth-help" id="larkLoginHelp">Setelah integrasi OAuth disiapkan, verifikasi akan dibuka di halaman/SDK resmi Lark. Lark dapat meminta kode email atau menawarkan verifikasi password; AgriAttend tidak mengumpulkan password Lark.</small>
         </section>
       </form>
       <div class="auth-message" id="authMessage" role="status"></div>
