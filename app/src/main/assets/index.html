@@ -27,10 +27,13 @@
         <button class="primary-btn large full" type="button" id="loginContinue">Lanjutkan <span>→</span></button>
         <div class="auth-actions" id="authActions" hidden><button class="primary-btn large full" type="submit" id="loginSubmit">Login AgriConnect <span>→</span></button><button class="ghost-btn full" type="button" id="backToUsername">Ganti username</button></div>
         <div class="lark-auth-separator"><span>ATAU</span></div>
-        <button class="outline-btn full lark-login-placeholder" id="loginLarkUnavailable" type="button" disabled aria-describedby="larkLoginHelp">
-          <span class="lark-brand-mark">L</span> Masuk dengan Lark
-        </button>
-        <small class="lark-auth-help" id="larkLoginHelp">Login Lark akan diaktifkan setelah Custom App dan backend OAuth resmi disiapkan administrator Agrinas.</small>
+        <section class="lark-login-box" aria-labelledby="larkLoginTitle">
+          <div class="lark-login-heading"><span class="lark-brand-mark">L</span><div><b id="larkLoginTitle">Login menggunakan email Lark</b><small>Gunakan email yang terdaftar pada akun Lark perusahaan.</small></div></div>
+          <div class="field-block"><label for="larkLoginEmail">Email Lark</label><input id="larkLoginEmail" type="email" inputmode="email" autocomplete="email" maxlength="254" placeholder="nama@perusahaan.com" /></div>
+          <button class="outline-btn full lark-login-placeholder" id="beginLarkLogin" type="button">Lanjutkan dengan Lark <span>→</span></button>
+          <div class="lark-auth-message" id="larkLoginMessage" role="status">Email digunakan untuk memulai login resmi Lark. Password dan kode verifikasi tidak diminta atau disimpan oleh AgriAttend.</div>
+          <small class="lark-auth-help" id="larkLoginHelp">Autentikasi Lark akan diteruskan ke halaman/SDK resmi setelah Custom App, OAuth callback, dan backend integrasi disiapkan administrator.</small>
+        </section>
       </form>
       <div class="auth-message" id="authMessage" role="status"></div>
       <div class="auth-footnote">Koneksi HTTPS langsung ke endpoint login yang ditemukan dalam APK AgriConnect v1.0.2. Pastikan penggunaan integrasi pihak ketiga diizinkan oleh pengelola perusahaan.</div>
@@ -94,7 +97,7 @@
         <div class="page-title-row"><div><div class="eyebrow">LARK / ATTENDANCE</div><h1>Attendance Lark</h1><p class="subhead">Tampilan pendamping untuk absensi dan pengajuan Lark · <span id="larkDate">—</span></p></div><span class="lark-connection-pill"><i></i> Belum terhubung</span></div>
         <article class="lark-notice">
           <span class="lark-notice-icon">i</span>
-          <div><b>Integrasi Lark belum aktif</b><p>Halaman dan alur sudah disiapkan. Login dan pengiriman absensi akan diaktifkan setelah aplikasi Lark resmi, izin Attendance, dan backend OAuth disetujui administrator. Tidak ada absensi yang dikirim dari halaman ini saat ini.</p></div>
+          <div><b>Integrasi Lark belum aktif</b><p>Halaman dan alur sudah disiapkan. Email Lark digunakan sebagai identitas awal. Autentikasi diteruskan melalui OAuth resmi setelah Custom App, callback, dan backend disiapkan administrator. Tidak ada absensi yang dikirim dari halaman ini saat ini.</p></div>
         </article>
         <article class="lark-profile-card">
           <div class="lark-avatar">L</div>
