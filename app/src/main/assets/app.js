@@ -2,7 +2,7 @@
 const STORE = 'agriattend.v1';
 const MASTER_API = 'https://agriconnect-master.starconnect.id';
 const CLIENT_APP = 'AgriAttend';
-const CLIENT_VERSION = '1.6.1';
+const CLIENT_VERSION = '1.6.2';
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
 const state = loadState();
@@ -334,7 +334,7 @@ async function loadOfficialAttendanceSettings(){
     selfieRequired=String(selfie?.value||'N').toUpperCase()==='Y';
     $('#companyPhotoPolicy').textContent=selfieRequired?'Selfie wajib':'Selfie opsional';
     $('#photoRequiredLabel').textContent=selfieRequired?'* Wajib':'';
-    $('#photoHelp').textContent=selfieRequired?'Tenant mewajibkan foto selfie sebelum absensi dikirim.':'Pilih foto bila diminta atau dibutuhkan oleh alur perusahaan.';
+    $('#photoHelp').textContent=selfieRequired?'Tenant mewajibkan foto selfie sebelum absensi dikirim.':'Pilih foto aktual dari Galeri atau File bila diminta atau dibutuhkan oleh alur perusahaan.';
   }catch(e){selfieRequired=false;$('#companyPhotoPolicy').textContent='Belum dapat dipastikan';$('#photoHelp').textContent='Kebijakan selfie tidak dapat dibaca: '+readableApiError(e);}
   try{
     const mobile=decodeMaybeJwt(session.profile?.mobileAuthorityToken);
@@ -961,7 +961,7 @@ async function recordAttendance(){
     if(isOutside&&!remarkInput)throw new Error('Isi keterangan untuk permintaan Di luar kantor.');
     if(isOutside&&!correctionPurposes.some(p=>p.value===purpose))throw new Error('Keperluan tidak termasuk pilihan resmi AgriConnect.');
     const photo=$('#attendancePhoto').files[0]||null;
-    if(selfieRequired&&!photo)throw new Error('Tenant mewajibkan foto selfie. Ambil atau pilih foto terlebih dahulu.');
+    if(selfieRequired&&!photo)throw new Error('Tenant mewajibkan foto selfie. Pilih foto aktual dari Galeri atau File terlebih dahulu.');
     if(photo&&photo.size>15*1024*1024)throw new Error('Ukuran file foto maksimal 15 MB sebelum kompresi.');
     if(photo&&!/^image\//i.test(photo.type))throw new Error('Lampiran absensi harus berupa gambar.');
     let device={};try{device=JSON.parse(AndroidBridge.getDeviceInfo()||'{}');}catch(_){device={};}
@@ -988,17 +988,40 @@ function renderRecent(){const list=$('#recentList');const items=combinedHistory(
 function renderHistory(){const list=$('#historyList');let items=combinedHistory();if(historyFilter!=='all')items=items.filter(x=>x.category===historyFilter);if(!items.length){list.innerHTML='<div class="empty-state"><span class="empty-icon">▤</span>Tidak ada data pada kategori ini.</div>';return;}list.innerHTML=items.map(x=>{const date=x.recordedAt||x.createdAt;const correction=x.category==='correction';return `<div class="history-item"><span class="list-icon">${correction?'✎':'◷'}</span><div class="history-detail"><b>${correction?'Koreksi '+(x.kind==='CHECKIN'?'Masuk':'Pulang'):'Absen '+(x.kind==='CHECKIN'?'Masuk':'Pulang')}</b><small>${esc(x.locationName||'Lokasi tidak dipilih')} · ${fmtDate(date,{day:'2-digit',month:'long',year:'numeric'})}, ${fmtTime(date)}</small>${correction?`<div class="history-extra">Waktu dimohonkan: ${esc(x.requestedDate)} ${esc(x.requestedTime)} · ${esc(x.reason.slice(0,95))} · Tiket: ${esc(x.serverTicket||'Tidak dikembalikan')}</div>`:`<div class="history-extra">GPS ${Number(x.latitude).toFixed(5)}, ${Number(x.longitude).toFixed(5)} · Akurasi ±${Math.round(x.accuracy)} m · Tiket: ${esc(x.serverTicket||'Tidak dikembalikan')}</div>`}</div><span class="history-status">${correction?(x.serverStatus||'Draf lokal'):'Terkirim'}</span></div>`;}).join('');}
 function renderLocations(){const grid=$('#locationsGrid');if(!state.locations.length){grid.innerHTML='<div class="panel empty-state" style="grid-column:1/-1"><span class="empty-icon">⌖</span>Belum ada lokasi kerja. Tambahkan titik lokasi yang ditetapkan perusahaan.</div>';return;}grid.innerHTML=state.locations.map(l=>`<article class="location-card"><div class="location-card-top"><span class="loc-symbol">⌖</span><div class="loc-actions"><button class="icon-btn" data-edit-location="${esc(l.id)}" aria-label="Edit lokasi">✎</button><button class="icon-btn" data-delete-location="${esc(l.id)}" aria-label="Hapus lokasi">×</button></div></div><h3>${esc(l.name)}</h3><p>${esc(l.address||'Tidak ada keterangan alamat')}</p><div class="location-coords">${Number(l.lat).toFixed(6)}, ${Number(l.lng).toFixed(6)}</div><div class="location-card-foot"><span>Lokasi referensi</span><a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${l.lat}&mlon=${l.lng}#map=16/${l.lat}/${l.lng}">Buka peta ↗</a></div></article>`).join('');}
 function openLocationEditor(loc=null){$('#locationEditor').hidden=false;$('#locationEditorTitle').textContent=loc?'Edit lokasi kerja':'Tambah lokasi kerja';$('#locationId').value=loc?.id||'';$('#locationName').value=loc?.name||'';$('#locationAddress').value=loc?.address||'';$('#locationLat').value=loc?.lat??'';$('#locationLng').value=loc?.lng??'';$('#locationEditor').scrollIntoView({behavior:'smooth',block:'center'});}
+function renderCorrectionAttachments(){
+  const input=$('#correctionAttachment'),list=$('#correctionAttachmentList');
+  if(!input||!list)return;
+  const files=[...(input.files||[])];
+  if(!files.length){list.innerHTML='';return;}
+  const formatSize=bytes=>bytes<1024*1024?Math.max(1,Math.round(bytes/1024))+' KB':(bytes/1024/1024).toFixed(2)+' MB';
+  list.innerHTML='<div class="attachment-list-title">Lampiran dipilih ('+files.length+')</div>'+files.map(file=>{
+    const safeName=esc(file.name||'Lampiran');
+    const type=(file.type||'').toLowerCase();
+    const icon=type.startsWith('image/')?'▧':'▤';
+    return '<div class="attachment-item"><span class="attachment-icon">'+icon+'</span><span class="attachment-name" title="'+safeName+'">'+safeName+'</span><span class="attachment-size">'+formatSize(file.size)+'</span></div>';
+  }).join('');
+}
+
 async function saveCorrection(e){
   e.preventDefault();
   if(!session){showAuth('Login AgriConnect diperlukan untuk mengirim koreksi resmi.');return;}
   const date=$('#correctionDate').value,time=$('#correctionTime').value,purpose=$('#correctionPurpose').value,reason=$('#correctionReason').value.trim();
   if(!date||!time||!purpose||!reason){showToast('Lengkapi tanggal, jam, keperluan, dan alasan.');return;}
+  const now=new Date(),today=localYmd(now),currentTime=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  if(date>today||(date===today&&time>currentTime)){showToast('Tanggal dan jam koreksi tidak boleh berada di masa depan.');return;}
   if(!correctionPurposes.some(p=>p.value===purpose)){showToast('Pilih keperluan yang disediakan server AgriConnect.');return;}
   const files=[...($('#correctionAttachment').files||[])];
-  for(const file of files){if(file.size>=5*1024*1024){showToast(`Ukuran setiap lampiran harus di bawah 5 MB: ${file.name}`);return;}}
+  for(const file of files){
+    if(file.size>=5*1024*1024){showToast(`Ukuran setiap lampiran harus di bawah 5 MB: ${file.name}`);return;}
+    const name=(file.name||'').toLowerCase(),mime=(file.type||'').toLowerCase();
+    const extension=name.split('.').pop();
+    const isImage=mime.startsWith('image/')||['jpg','jpeg','png','webp','heic','heif','gif'].includes(extension);
+    const isPdf=mime==='application/pdf'||name.endsWith('.pdf');
+    if(!isImage&&!isPdf){showToast(`Format lampiran hanya gambar atau PDF: ${file.name}`);return;}
+  }
   const button=$('#submitCorrection');button.disabled=true;button.textContent='Mengirim pengajuan…';
   try{
-    const device=JSON.parse(AndroidBridge.getDeviceInfo()||'{}');
+    let device={};try{device=JSON.parse(AndroidBridge.getDeviceInfo()||'{}');}catch(_){device={};}
     const payload={
       deviceId:device.deviceId||'',deviceName:device.deviceName||'',deviceModel:device.deviceModel||'',
       devicePlatform:'android',deviceOs:'android',deviceOsVersion:device.deviceOsVersion||'',
@@ -1037,7 +1060,7 @@ function bindEvents(){
   $('#refreshRequestStatuses').addEventListener('click',()=>loadOfficialCheckInOutStatuses().then(()=>showToast('Status pengajuan diperbarui.')).catch(e=>showToast('Gagal memuat status: '+readableApiError(e))));
   $('#refreshCompanyLocation').addEventListener('click',()=>loadOfficialCompanyLocation().then(()=>showToast('Lokasi kantor berhasil dimuat dari AgriConnect.')).catch(e=>showToast(readableApiError(e))));
   $$('[data-attendance-mode]').forEach(b=>b.addEventListener('click',()=>setAttendanceMode(b.dataset.attendanceMode)));
-  $('#attendancePhoto').addEventListener('change',()=>{const f=$('#attendancePhoto').files[0];const p=$('#photoPreview');p.innerHTML='';if(!f){p.hidden=true;return;}if(!f.type.startsWith('image/')){showToast('Pilih berkas gambar.');$('#attendancePhoto').value='';return;}const img=document.createElement('img');img.src=URL.createObjectURL(f);p.appendChild(img);p.hidden=false;});
+  $('#attendancePhoto').addEventListener('change',()=>{const f=$('#attendancePhoto').files[0];const p=$('#photoPreview');const old=p.querySelector('img');if(old&&old.src.startsWith('blob:'))URL.revokeObjectURL(old.src);p.innerHTML='';if(!f){p.hidden=true;return;}if(!f.type.startsWith('image/')){showToast('Pilih berkas gambar.');$('#attendancePhoto').value='';p.hidden=true;return;}const img=document.createElement('img');img.alt='Pratinjau foto absensi';img.src=URL.createObjectURL(f);p.appendChild(img);p.hidden=false;});
   $('#correctionForm').addEventListener('submit',saveCorrection);$('#exportAll').addEventListener('click',exportData);
   $$('[data-history-filter]').forEach(b=>b.addEventListener('click',()=>{historyFilter=b.dataset.historyFilter;$$('[data-history-filter]').forEach(x=>x.classList.toggle('active',x===b));renderHistory();}));
   $('#clearHistory').addEventListener('click',()=>{if(confirm('Hapus seluruh catatan dan draf koreksi lokal? Tindakan ini tidak dapat dibatalkan.')){state.attendance=[];state.corrections=[];persist();showToast('Riwayat lokal dihapus.');}});
@@ -1065,7 +1088,7 @@ function bindEvents(){
   $('#logoutBtn').addEventListener('click',logout);
   $('#closeTicket').addEventListener('click',()=>$('#ticketDialog').close());
   $('#copyTicket').addEventListener('click',async()=>{const value=$('#ticketNumber').textContent;try{await navigator.clipboard.writeText(value);showToast('Nomor tiket disalin.');}catch(_){showToast('Tidak dapat menyalin nomor tiket.');}});
-  $('#correctionDate').max=new Date().toISOString().slice(0,10);
+  $('#correctionDate').max=localYmd(new Date());$('#correctionAttachment').addEventListener('change',renderCorrectionAttachments);$('#correctionForm').addEventListener('reset',()=>setTimeout(renderCorrectionAttachments,0));
   $('#shiftStartDate').min=new Date().toISOString().slice(0,10);$('#shiftEndDate').min=new Date().toISOString().slice(0,10);
   $('#shiftStartDate').addEventListener('change',()=>{if($('#shiftEndDate').value&&$('#shiftEndDate').value<$('#shiftStartDate').value)$('#shiftEndDate').value=$('#shiftStartDate').value;$('#shiftEndDate').min=$('#shiftStartDate').value||new Date().toISOString().slice(0,10);});
 }

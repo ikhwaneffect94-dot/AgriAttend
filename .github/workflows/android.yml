@@ -3,7 +3,7 @@ name: Build AgriAttend APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
     paths:
       - 'AgriAttend-Android-Ready-v*.zip'
       - '.github/workflows/android.yml'
@@ -61,7 +61,7 @@ jobs:
           elif [ -f "settings.gradle" ] && [ -d "app" ]; then
             PROJECT_DIR=.
           else
-            echo "::error::Upload ZIP AgriAttend-Android-Ready-v1.6.1.zip ke root repository."
+            echo "::error::Upload ZIP AgriAttend-Android-Ready-v1.6.2.zip ke root repository."
             exit 1
           fi
           test -f "$PROJECT_DIR/settings.gradle"
@@ -81,7 +81,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgriAttend-debug-APK-v1.6.1
+          name: AgriAttend-debug-APK-v1.6.2
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
