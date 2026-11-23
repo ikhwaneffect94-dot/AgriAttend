@@ -51,7 +51,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="security-note"><span class="security-dot"></span><div><b>Mode pendamping</b><small>Data tersimpan di perangkat</small></div></div>
-        <button class="logout-btn" id="logoutBtn">Keluar dari AgriConnect ↗</button><div class="sidebar-version">Versi 1.5.8 · Android</div>
+        <button class="logout-btn" id="logoutBtn">Keluar dari AgriConnect ↗</button><div class="sidebar-version">Versi 1.6.2 · Android</div>
       </div>
     </aside>
 
@@ -92,7 +92,7 @@
           <div class="field-block"><label>Lokasi absensi</label><div class="attendance-mode-picker"><button type="button" class="mode-choice active" data-attendance-mode="inOffice"><b>Di kantor</b><small>Gunakan validasi radius kantor</small></button><button type="button" class="mode-choice" data-attendance-mode="outOffice"><b>Di luar kantor</b><small>Isi keperluan dan keterangan</small></button></div></div>
           <div class="gps-card gps-card-compact"><div class="gps-header"><div><span class="gps-dot"></span><b>Lokasi GPS perangkat</b></div><button id="refreshGPS" class="tiny-btn">↻ Perbarui</button></div><div class="gps-values"><div><small>LATITUDE</small><strong id="gpsLat">Belum diambil</strong></div><div><small>LONGITUDE</small><strong id="gpsLng">Belum diambil</strong></div></div><div class="gps-meta"><span id="gpsAccuracy">Akurasi: —</span><span id="gpsDistance">Jarak kantor: —</span><span id="captureTime">Belum dicatat</span></div><div class="gps-map-link" id="gpsMapLink">Lokasi aktual akan tampil setelah GPS diambil.</div></div>
           <div class="field-block" id="attendancePurposeBlock" hidden><label for="attendancePurpose">Keperluan di luar kantor <em>*</em></label><select id="attendancePurpose"><option value="">Pilih keperluan dari AgriConnect</option></select><small id="attendancePurposeHelp">Pilihan berasal dari daftar tenant.</small></div>
-          <div class="field-block"><label for="attendancePhoto">Foto / selfie <span id="photoRequiredLabel" class="required-label"></span></label><input type="file" id="attendancePhoto" accept="image/*" capture="user" /><small id="photoHelp">Foto mengikuti kebijakan tenant AgriConnect.</small><div id="photoPreview" class="photo-preview" hidden></div></div>
+          <div class="field-block"><label for="attendancePhoto">Foto / selfie <span id="photoRequiredLabel" class="required-label"></span></label><input type="file" id="attendancePhoto" accept="image/*" /><small id="photoHelp">Pilih foto aktual dari Galeri atau File di perangkat. Foto tetap mengikuti kebijakan tenant AgriConnect.</small><div id="photoPreview" class="photo-preview" hidden></div></div>
           <div class="field-block" id="attendanceNoteBlock" hidden><label for="attendanceNote">Keterangan di luar kantor <em>*</em></label><textarea id="attendanceNote" rows="3" maxlength="500" placeholder="Tulis alasan/keterangan absensi..."></textarea><small id="attendanceNoteHelp">Keterangan ini dikirim sebagai remark ke AgriConnect.</small></div><div class="attendance-official-remark" id="officeRemarkInfo">Mode Di kantor menggunakan keterangan resmi AgriConnect: <b>In The Office</b>.</div>
           <details class="location-source-details"><summary>Informasi validasi lokasi kantor</summary><div class="company-info compact-company-info"><span id="connectionStatus" hidden>Belum terhubung</span><span id="faceRecognitionNotice" hidden></span><div><small>SUMBER</small><b>API AgriConnect /dashboard/location</b></div><div><small>KOORDINAT KANTOR</small><b id="companyLocationName">Belum tersedia</b></div><div><small>RADIUS DIIZINKAN</small><b id="companyTolerance">Tidak tersedia</b></div><div><small>FOTO WAJIB</small><b id="companyPhotoPolicy">Memeriksa…</b></div></div><small id="companyLocationMessage" role="status">Koordinat dan radius hanya ditampilkan bila dikirim oleh tenant.</small><button class="outline-btn full" type="button" id="refreshCompanyLocation">Muat ulang data lokasi ↻</button></details>
           <button class="primary-btn large full" id="recordAttendance">Kirim Absen Masuk <span>→</span></button>
@@ -177,7 +177,7 @@
         <div class="page-title-row"><div><div class="eyebrow">SELF SERVICE</div><h1>Pengajuan</h1><p class="subhead">Kelola koreksi absensi dan permohonan perubahan jam kerja.</p></div><span class="approval-badge">Perlu persetujuan HR</span></div>
         <div class="correction-layout">
           <article class="panel correction-panel">
-            <div class="form-section-title"><span class="form-icon">✎</span><div><h2>Detail pengajuan</h2><p>Formulir mengikuti alur backdate pada AgriConnect.</p></div></div>
+            <div class="form-section-title"><span class="form-icon">✎</span><div><h2>Koreksi / Backdate Absensi</h2><p>Ajukan koreksi tanggal dan jam kejadian sebenarnya untuk ditinjau HR melalui AgriConnect.</p></div></div>
             <form id="correctionForm">
               <div class="form-grid">
                 <div class="field-block"><label for="correctionType">Jenis koreksi <em>*</em></label><select id="correctionType" required><option value="CHECKIN">Absen Masuk</option><option value="CHECKOUT">Absen Pulang</option></select></div>
@@ -185,7 +185,7 @@
                 <div class="field-block"><label for="correctionTime">Jam yang dimohonkan <em>*</em></label><input type="time" id="correctionTime" required /></div>
                 <div class="field-block full-span"><label for="correctionPurpose">Keperluan <em>*</em></label><select id="correctionPurpose" required><option value="">Login untuk memuat pilihan keperluan</option></select><small id="correctionPurposeHelp">Pilihan keperluan dimuat dari AgriConnect setelah login.</small></div>
                 <div class="field-block full-span"><label for="correctionReason">Alasan dan kronologi <em>*</em></label><textarea id="correctionReason" rows="4" required placeholder="Jelaskan kejadian dengan jujur dan ringkas..."></textarea><small>Permohonan akan diproses sesuai kebijakan dan persetujuan perusahaan.</small></div>
-                <div class="field-block full-span"><label for="correctionAttachment">Lampiran pendukung (opsional)</label><input type="file" id="correctionAttachment" accept="image/*,.pdf" multiple /><small>Bisa memilih beberapa gambar/PDF. Setiap berkas harus di bawah 5 MB; lampiran akan ikut dikirim ke API AgriConnect.</small></div>
+                <div class="field-block full-span"><label for="correctionAttachment">Lampiran pendukung (opsional)</label><input type="file" id="correctionAttachment" accept="image/*,.pdf" multiple /><small>Pilih bukti dari Galeri atau File. Bisa beberapa gambar/PDF; setiap berkas harus di bawah 5 MB dan akan dikirim bersama pengajuan resmi.</small><div id="correctionAttachmentList" class="attachment-list" aria-live="polite"></div></div>
               </div>
               <div class="form-actions"><button class="primary-btn" id="submitCorrection" type="submit">Kirim pengajuan koreksi <span>→</span></button><button class="ghost-btn" type="reset">Bersihkan</button></div>
             </form>
